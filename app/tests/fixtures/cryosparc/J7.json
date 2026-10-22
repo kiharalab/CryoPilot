@@ -1,0 +1,74 @@
+{
+ "updated_at": {
+  "$date": "2026-10-13T19:48:42.278Z"
+ },
+ "created_at": {
+  "$date": "2026-10-13T19:08:06.984Z"
+ },
+ "uid": "J7",
+ "project_uid": "P61",
+ "workspace_uids": [
+  "W1"
+ ],
+ "spec": {
+  "type": "class_2D_new",
+  "outputs": {
+   "particles": {
+    "type": "particle",
+    "title": "Particles",
+    "description": "Particles that were successfully processed, including alignments across all classes.",
+    "passthrough": "particles",
+    "results": [
+     {
+      "name": "blob",
+      "dtype": "blob",
+      "versions": [
+       20
+      ],
+      "metafiles": [
+       "J7/J7_020_particles.cs"
+      ],
+      "num_items": [
+       752248
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "ctf",
+      "dtype": "ctf",
+      "versions": [
+       20
+      ],
+      "metafiles": [
+       "J7/J7_020_particles.cs"
+      ],
+      "num_items": [
+       752248
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 752248,
+    "image": "6ace83f290eb283471482821",
+    "summary": {},
+    "latest_summary_stats": {
+     "mean_class_ESS": 5.455798625946045,
+     "version": 20
+    }
+   }
+  }
+ },
+ "job_dir": "J7",
+ "title": "2D Classification J6 blob-cleanup 200 classes 12A sigma1 mask180-230",
+ "description": "",
+ "status": "completed",
+ "completed_at": {
+  "$date": "2026-10-13T19:48:42.278Z"
+ },
+ "deleted": false,
+ "parents": [
+  "J6"
+ ],
+ "children": [],
+ "is_final_result": false
+}

@@ -1,0 +1,83 @@
+/*
+ * Mol* chrome that CryoPilot replaces or restyles. The selectors carry three
+ * classes so they win over molstar.css whatever order the sheets load in.
+ */
+.molstar-host .msp-plugin .msp-logo {
+  display: none;
+}
+
+/* No frame around the canvas, and the theme's background behind it while it loads. */
+.molstar-host .msp-plugin .msp-layout-standard,
+.molstar-host .msp-plugin .msp-plugin-content {
+  border: 0;
+}
+.molstar-host .msp-plugin,
+.molstar-host .msp-plugin .msp-viewport {
+  background: var(--viewer-bg);
+}
+
+/* Task progress: the activity pill replaces it until the full Mol* controls are shown. */
+.molstar-host[data-chrome="simple"] .msp-plugin .msp-background-tasks,
+.molstar-host[data-chrome="simple"] .msp-plugin .msp-overlay-tasks {
+  display: none;
+}
+
+/* The hovered-atom label in the bottom-right corner. */
+.molstar-host .msp-plugin .msp-highlight-info {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  opacity: 1;
+}
+.molstar-host .msp-plugin .msp-highlight-info-additional {
+  color: var(--muted);
+}
+.molstar-host .msp-plugin .msp-highlight-info-hr {
+  background-color: var(--line);
+}
+
+/* Range inputs in the layer list: a thin track and a small thumb. */
+.viewer-range {
+  appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: default;
+}
+.viewer-range::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.viewer-range::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.viewer-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--elevated);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.viewer-range::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--elevated);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.viewer-range:disabled::-webkit-slider-thumb {
+  background: var(--line-strong);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}

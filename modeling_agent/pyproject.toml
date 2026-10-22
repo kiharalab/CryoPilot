@@ -1,0 +1,20 @@
+[project]
+name = "cryoem-modeling-agent"
+version = "0.1.0"
+description = "A small terminal cryo-EM modeling and DAQ validation agent."
+requires-python = ">=3.10"
+dependencies = [
+  "gemmi>=0.7.3",
+  "matplotlib>=3.8",
+  "mrcfile>=1.5",
+  "numpy>=1.26",
+  "onnxruntime>=1.22; sys_platform != 'linux'",
+  "onnxruntime-gpu[cuda,cudnn]>=1.22; sys_platform == 'linux'",
+  "openai-agents>=0.18.3",
+  "pillow>=11",
+  "requests>=2.32",
+  "scipy>=1.13",
+]
+
+[tool.uv]
+package = false

@@ -1,0 +1,5 @@
+fastapi>=0.104
+uvicorn>=0.24
+python-multipart>=0.0.6
+websockets>=12
+requests>=2.32

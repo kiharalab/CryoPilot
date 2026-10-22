@@ -1,0 +1,249 @@
+{
+ "updated_at": {
+  "$date": "2026-10-13T20:31:11.535Z"
+ },
+ "created_at": {
+  "$date": "2026-10-13T19:54:45.353Z"
+ },
+ "uid": "J9",
+ "project_uid": "P61",
+ "workspace_uids": [
+  "W1"
+ ],
+ "spec": {
+  "type": "homo_abinit",
+  "outputs": {
+   "volumes_all_classes": {
+    "type": "volume_multi",
+    "title": "All volumes",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       1377
+      ],
+      "metafiles": [
+       "J9/J9_final_volume_series.cs"
+      ],
+      "num_items": [
+       4
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "series",
+      "dtype": "series",
+      "versions": [
+       1377
+      ],
+      "metafiles": [
+       "J9/J9_final_volume_series.cs"
+      ],
+      "num_items": [
+       4
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "classification_info",
+      "dtype": "classification_info",
+      "versions": [
+       1377
+      ],
+      "metafiles": [
+       "J9/J9_final_volume_series.cs"
+      ],
+      "num_items": [
+       4
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 4,
+    "image": null,
+    "summary": {
+     "classification_info/type": "abinit",
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ],
+     "series/count": 4,
+     "series/psize_A": 2.490000009536743,
+     "series/shape": [
+      160,
+      160,
+      160
+     ],
+     "series/type": "zip"
+    },
+    "latest_summary_stats": {}
+   },
+   "volume_class_0": {
+    "type": "volume",
+    "title": "Volume class 0",
+    "description": "Density volume for structure from class 0",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       1377
+      ],
+      "metafiles": [
+       "J9/J9_class_00_final_volume.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6ace9507731f6b5ddcfef405",
+    "summary": {
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ]
+    },
+    "latest_summary_stats": {
+     "num_iters": 1378,
+     "processed_fraction": 1.0,
+     "version": 1377
+    }
+   },
+   "volume_class_1": {
+    "type": "volume",
+    "title": "Volume class 1",
+    "description": "Density volume for structure from class 1",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       1377
+      ],
+      "metafiles": [
+       "J9/J9_class_01_final_volume.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6ace9508731f6b5ddcfef407",
+    "summary": {
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ]
+    },
+    "latest_summary_stats": {
+     "num_iters": 1378,
+     "processed_fraction": 1.0,
+     "version": 1377
+    }
+   },
+   "volume_class_2": {
+    "type": "volume",
+    "title": "Volume class 2",
+    "description": "Density volume for structure from class 2",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       1377
+      ],
+      "metafiles": [
+       "J9/J9_class_02_final_volume.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6ace9508731f6b5ddcfef409",
+    "summary": {
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ]
+    },
+    "latest_summary_stats": {
+     "num_iters": 1378,
+     "processed_fraction": 1.0,
+     "version": 1377
+    }
+   },
+   "volume_class_3": {
+    "type": "volume",
+    "title": "Volume class 3",
+    "description": "Density volume for structure from class 3",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       1377
+      ],
+      "metafiles": [
+       "J9/J9_class_03_final_volume.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6ace9509731f6b5ddcfef40b",
+    "summary": {
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ]
+    },
+    "latest_summary_stats": {
+     "num_iters": 1378,
+     "processed_fraction": 1.0,
+     "version": 1377
+    }
+   }
+  }
+ },
+ "job_dir": "J9",
+ "title": "Ab Initio C1 - J8 broad 2D-selected subset 100k, 4 classes",
+ "description": "",
+ "status": "completed",
+ "completed_at": {
+  "$date": "2026-10-13T20:31:11.535Z"
+ },
+ "deleted": false,
+ "parents": [
+  "J8"
+ ],
+ "children": [],
+ "is_final_result": false
+}

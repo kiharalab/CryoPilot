@@ -1,0 +1,239 @@
+"""Health, first-run setup, settings, credentials, and processing guides."""
+
+from __future__ import annotations
+
+import json
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from typing import Any
+
+from fastapi import APIRouter, Request
+
+from . import cryosparc_bridge, cryozeta_bridge, guides, modeling_toolchain
+from .config import HARNESS_SESSION_DB, MODELING_PYTHON
+from .state import (
+    RECONSTRUCTION_EFFORTS,
+    RECONSTRUCTION_SUPPORTED,
+    REASONING_EFFORTS,
+    SYSTEM,
+    api_error,
+    credentials,
+    cryosparc_credentials,
+    cryosparc_settings,
+    cryozeta_credentials,
+    cryozeta_settings,
+    defaults,
+    openai_key,
+    processing_guide,
+    store,
+)
+
+router = APIRouter()
+
+OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _openai_view() -> dict[str, Any]:
+    return {"configured": bool(openai_key()), "source": credentials.source("openai_api_key")}
+
+
+def setup_view() -> dict[str, Any]:
+    return {
+        "onboarded": bool(store.get_setting("onboarded", False)),
+        "platform": {"system": SYSTEM, "reconstruction_supported": RECONSTRUCTION_SUPPORTED},
+        "openai": _openai_view(),
+        "cryosparc": cryosparc_settings(),
+        "cryozeta": cryozeta_settings(),
+        "processing_guide": processing_guide(),
+        "remember_credentials": credentials.remember,
+        "defaults": defaults(),
+        "modeling_tools": modeling_toolchain.status(),
+    }
+
+
+# ------------------------------------------------------------------ health
+@router.get("/api/health")
+def health() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "openai_key_set": bool(openai_key()),
+        "harness_db": str(HARNESS_SESSION_DB),
+        "harness_db_exists": HARNESS_SESSION_DB.exists(),
+        "modeling_python": MODELING_PYTHON,
+        **setup_view(),
+    }
+
+
+# ------------------------------------------------------------------- setup
+@router.get("/api/setup")
+def get_setup() -> dict[str, Any]:
+    return setup_view()
+
+
+@router.post("/api/setup/complete")
+def complete_setup() -> dict[str, Any]:
+    store.set_setting("onboarded", True)
+    return setup_view()
+
+
+# ---------------------------------------------------------------- settings
+@router.get("/api/settings")
+def get_settings() -> dict[str, Any]:
+    return setup_view()
+
+
+@router.put("/api/settings")
+async def put_settings(request: Request) -> dict[str, Any]:
+    body = await request.json()
+
+    if "remember_credentials" in body:
+        credentials.set_remember(bool(body["remember_credentials"]))
+
+    openai = body.get("openai") or {}
+    if openai.get("api_key"):
+        credentials.set("openai_api_key", str(openai["api_key"]))
+    if openai.get("clear"):
+        credentials.set("openai_api_key", None)
+
+    cryosparc = body.get("cryosparc") or {}
+    if cryosparc:
+        saved = store.get_setting("cryosparc", {}) or {}
+        changed = False
+        for key in ("url", "email"):
+            if key in cryosparc:
+                value = str(cryosparc[key] or "").strip()
+                changed = changed or value != saved.get(key)
+                saved[key] = value
+        if cryosparc.get("password"):
+            credentials.set("cryosparc_password", str(cryosparc["password"]))
+            changed = True
+        if cryosparc.get("clear_password"):
+            credentials.set("cryosparc_password", None)
+            changed = True
+        if changed:
+            saved.pop("verified_at", None)
+        store.set_setting("cryosparc", saved)
+
+    cryozeta = body.get("cryozeta") or {}
+    if cryozeta:
+        saved = store.get_setting("cryozeta", {}) or {}
+        changed = False
+        for key in ("base_url", "username"):
+            if key in cryozeta:
+                value = str(cryozeta[key] or "").strip()
+                changed = changed or value != saved.get(key)
+                saved[key] = value
+        if cryozeta.get("password"):
+            credentials.set("cryozeta_password", str(cryozeta["password"]))
+            changed = True
+        if cryozeta.get("clear_password"):
+            credentials.set("cryozeta_password", None)
+            changed = True
+        if changed:
+            saved.pop("verified_at", None)
+        store.set_setting("cryozeta", saved)
+
+    if "processing_guide" in body:
+        choice = str(body["processing_guide"] or "").strip().lower()
+        if choice not in guides.GUIDE_FILES:
+            raise api_error(422, f"Unknown processing guide: {choice}")
+        store.set_setting("processing_guide", choice)
+
+    if "defaults" in body:
+        incoming = body.get("defaults") or {}
+        saved = store.get_setting("defaults", {}) or {}
+        for key in ("reconstruction_model", "modeling_model"):
+            if key in incoming:
+                saved[key] = str(incoming[key] or "").strip()
+        for key, allowed in (("reconstruction_effort", RECONSTRUCTION_EFFORTS), ("modeling_effort", REASONING_EFFORTS)):
+            if key in incoming:
+                value = str(incoming[key] or "").strip().lower()
+                if value and value not in allowed:
+                    raise api_error(422, f"Unknown reasoning effort: {value}")
+                saved[key] = value
+        if "modeling_max_turns" in incoming:
+            try:
+                turns = int(incoming["modeling_max_turns"])
+            except (TypeError, ValueError):
+                raise api_error(422, "Maximum turns must be a whole number")
+            if not 1 <= turns <= 5000:
+                raise api_error(422, "Maximum turns must be between 1 and 5000")
+            saved["modeling_max_turns"] = turns
+        store.set_setting("defaults", saved)
+
+    return setup_view()
+
+
+# ---------------------------------------------------------- connection tests
+@router.post("/api/settings/openai/test")
+def test_openai() -> dict[str, Any]:
+    key = openai_key()
+    if not key:
+        raise api_error(400, "Enter an OpenAI API key first.")
+    request = urllib.request.Request(OPENAI_MODELS_URL, headers={"Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            raise api_error(502, "OpenAI rejected this API key.")
+        raise api_error(502, f"OpenAI returned HTTP {exc.code}.")
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise api_error(502, f"Could not reach OpenAI: {getattr(exc, 'reason', exc)}")
+    models = sorted(str(entry.get("id")) for entry in payload.get("data") or [] if entry.get("id"))
+    default = defaults()["reconstruction_model"]
+    return {"ok": True, "model_count": len(models), "default_model_available": default in models, "models": models}
+
+
+@router.post("/api/settings/cryosparc/test")
+def test_cryosparc() -> dict[str, Any]:
+    url, email, password = cryosparc_credentials()
+    try:
+        result = cryosparc_bridge.test_connection(url, email, password)
+    except Exception as exc:
+        raise api_error(502, f"Could not sign in to CryoSPARC at {url}: {exc}")
+    saved = store.get_setting("cryosparc", {}) or {}
+    saved["verified_at"] = _now()
+    store.set_setting("cryosparc", saved)
+    return result
+
+
+@router.post("/api/settings/cryozeta/test")
+def test_cryozeta() -> dict[str, Any]:
+    base_url, username, password = cryozeta_credentials()
+    try:
+        result = cryozeta_bridge.test_login(base_url, username, password)
+    except (cryozeta_bridge.CryoZetaError, ValueError) as exc:
+        raise api_error(502, f"CryoZeta sign-in failed: {exc}")
+    except Exception as exc:
+        raise api_error(502, f"Could not reach CryoZeta: {exc}")
+    saved = store.get_setting("cryozeta", {}) or {}
+    saved["verified_at"] = _now()
+    store.set_setting("cryozeta", saved)
+    return result
+
+
+@router.post("/api/settings/modeling-tools/refresh")
+def refresh_modeling_tools() -> dict[str, Any]:
+    return {"modeling_tools": modeling_toolchain.status(refresh=True)}
+
+
+# ------------------------------------------------------------------ guides
+@router.get("/api/guides")
+def list_guides() -> dict[str, Any]:
+    return {"guides": guides.list_guides(), "selected": processing_guide(), "default": guides.DEFAULT_GUIDE}
+
+
+@router.get("/api/guides/{guide_id}")
+def get_guide(guide_id: str) -> dict[str, Any]:
+    try:
+        return guides.read_guide(guide_id)
+    except KeyError:
+        raise api_error(404, f"Unknown processing guide: {guide_id}")
+    except OSError as exc:
+        raise api_error(404, f"Could not read the guide: {exc}")

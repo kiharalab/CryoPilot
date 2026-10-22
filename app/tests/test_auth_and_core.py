@@ -1,0 +1,395 @@
+"""Tests for the access checks, agent environments, session resume, and server odds and ends.
+
+Run from the repository root:
+    .venv/bin/python -m pytest app/tests/test_auth_and_core.py -q
+"""
+
+from __future__ import annotations
+
+import os
+import queue
+import socket
+import stat
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from app.server import config  # noqa: E402
+
+if config.APP_HOME == Path("~/.cryoagent/app").expanduser():
+    pytest.skip("the app home is the user's real one; run with CRYOAGENT_APP_HOME set", allow_module_level=True)
+
+from fastapi.testclient import TestClient  # noqa: E402
+from starlette.websockets import WebSocketDisconnect  # noqa: E402
+
+from app import serve  # noqa: E402
+from app.server import auth, files, main, processes as processes_module  # noqa: E402
+from app.server.credentials import Credentials  # noqa: E402
+from app.server.main import app  # noqa: E402
+from app.server.state import bus, defaults, driver_env, processes, store  # noqa: E402
+
+HEADERS = {"Authorization": f"Bearer {auth.TOKEN}"}
+
+
+@pytest.fixture(autouse=True)
+def auth_state(monkeypatch):
+    """Every test starts signed-out-but-allowed and leaves no pause or used launch code behind."""
+
+    monkeypatch.setattr(auth, "AUTH_ENABLED", True)
+    monkeypatch.setattr(auth, "_paused_until", 0.0)
+    monkeypatch.setattr(auth, "_launch_code_used", False)
+
+
+@pytest.fixture
+def client():
+    return TestClient(app, headers=HEADERS)
+
+
+@pytest.fixture
+def sandbox(tmp_path, monkeypatch):
+    """Keep project workspaces out of the repository's modeling_agent folder."""
+
+    monkeypatch.setattr(files, "MODELING_SANDBOX_ROOT", tmp_path)
+    monkeypatch.setattr(files, "MODELING_WORKSPACES_DIR", tmp_path / "workspaces")
+    return tmp_path
+
+
+def make_project(title: str) -> dict:
+    return store.create_project(title=title)
+
+
+# ------------------------------------------------------------ host and origin
+@pytest.mark.parametrize("auth_enabled", [True, False])
+def test_requests_for_another_host_are_refused_in_both_modes(monkeypatch, auth_enabled):
+    monkeypatch.setattr(auth, "AUTH_ENABLED", auth_enabled)
+    rebound = TestClient(app, base_url="http://evil.example:8790", headers=HEADERS)
+    response = rebound.get("/api/setup")
+    assert response.status_code == 403
+    # A refused host is not a sign-out: the app must not drop to the sign-in gate.
+    assert "auth_required" not in response.json()
+    assert rebound.post("/api/projects", json={"title": "Rebound"}).status_code == 403
+    assert rebound.get("/").status_code == 403
+
+
+@pytest.mark.parametrize("base_url", ["http://localhost:9000", "http://127.0.0.1:8790", "http://[::1]:8790"])
+def test_local_host_names_are_accepted_on_any_port(base_url):
+    assert TestClient(app, base_url=base_url, headers=HEADERS).get("/api/setup").status_code == 200
+
+
+def test_bind_host_and_allowed_hosts_extend_the_list(monkeypatch):
+    lab = TestClient(app, base_url="http://zebra.lab:8790", headers=HEADERS)
+    assert lab.get("/api/setup").status_code == 403
+    monkeypatch.setattr(auth, "BIND_HOST", "zebra.lab")
+    assert lab.get("/api/setup").status_code == 200
+    monkeypatch.setattr(auth, "BIND_HOST", "127.0.0.1")
+    monkeypatch.setattr(auth, "ALLOWED_HOSTS", {"zebra.lab"})
+    assert lab.get("/api/setup").status_code == 200
+    # Listening on every interface is the user's choice; only the token applies then.
+    monkeypatch.setattr(auth, "ALLOWED_HOSTS", set())
+    monkeypatch.setattr(auth, "BIND_HOST", "0.0.0.0")
+    assert TestClient(app, base_url="http://anything.example", headers=HEADERS).get("/api/setup").status_code == 200
+
+
+@pytest.mark.parametrize("auth_enabled", [True, False])
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Origin": "http://127.0.0.1:3000"},
+        {"Origin": "null"},
+        {"Sec-Fetch-Site": "same-site"},
+        {"Sec-Fetch-Site": "cross-site"},
+    ],
+)
+def test_changes_from_other_origins_are_refused(client, monkeypatch, auth_enabled, headers):
+    monkeypatch.setattr(auth, "AUTH_ENABLED", auth_enabled)
+    title = f"Cross origin {auth_enabled} {sorted(headers.items())}"
+    # A text/plain body is what a no-cors fetch from another page sends.
+    response = client.post("/api/projects", content=f'{{"title": "{title}"}}', headers={"Content-Type": "text/plain", **headers})
+    assert response.status_code == 403
+    assert title not in {project["title"] for project in store.list_projects()}
+    assert client.post("/api/auth/login", json={"token": auth.TOKEN}, headers=headers).status_code == 403
+
+
+def test_same_origin_changes_and_cross_origin_reads_pass(client):
+    created = client.post(
+        "/api/projects",
+        json={"title": "Same origin"},
+        headers={"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"},
+    )
+    assert created.status_code == 200, created.text
+    # Reads are not checked: another origin cannot read the response anyway.
+    assert client.get("/api/projects", headers={"Origin": "http://127.0.0.1:3000"}).status_code == 200
+
+
+def test_websocket_refusals_arrive_as_close_codes(client):
+    anonymous = TestClient(app)
+    with anonymous.websocket_connect("/api/terminals/anything/ws") as socket_:
+        with pytest.raises(WebSocketDisconnect) as info:
+            socket_.receive_text()
+    assert info.value.code == auth.CLOSE_UNAUTHORIZED
+
+    with client.websocket_connect("/api/terminals/anything/ws", headers={**HEADERS, "Origin": "http://evil.example"}) as socket_:
+        with pytest.raises(WebSocketDisconnect) as info:
+            socket_.receive_text()
+    assert info.value.code == auth.CLOSE_FORBIDDEN
+
+    # TestClient ignores base_url for sockets; an absolute URL sets the Host header.
+    with client.websocket_connect("ws://evil.example:8790/api/terminals/anything/ws", headers=HEADERS) as socket_:
+        with pytest.raises(WebSocketDisconnect) as info:
+            socket_.receive_text()
+    assert info.value.code == auth.CLOSE_FORBIDDEN
+
+
+# ------------------------------------------------------- cookie and launch code
+def test_login_cookie_is_an_hmac_named_for_the_port():
+    anonymous = TestClient(app)
+    response = anonymous.post("/api/auth/login", json={"token": f"http://127.0.0.1:8790/?token={auth.TOKEN}"})
+    assert response.status_code == 200
+    cookie = response.headers["set-cookie"]
+    name, value = cookie.split(";", 1)[0].split("=", 1)
+    assert name == "cryopilot_session_80"  # TestClient's server port
+    assert value == auth.session_value() and value != auth.TOKEN
+    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+
+    assert TestClient(app, headers={"Cookie": f"{name}={value}"}).get("/api/setup").status_code == 200
+    # The raw token is no longer a valid cookie, and another port's cookie does not count.
+    assert TestClient(app, headers={"Cookie": f"{name}={auth.TOKEN}"}).get("/api/setup").status_code == 401
+    assert TestClient(app, headers={"Cookie": f"cryopilot_session_8791={value}"}).get("/api/setup").status_code == 401
+    status = TestClient(app, headers={"Cookie": f"{name}={value}"}).get("/api/auth/status").json()
+    assert status == {"enabled": True, "authenticated": True}
+
+
+def test_launch_code_signs_in_once(monkeypatch):
+    monkeypatch.setattr(auth, "LAUNCH_CODE", "launch-code-for-tests")
+    monkeypatch.setattr(auth, "LAUNCH_DEADLINE", auth.time.monotonic() + 60)
+    browser = TestClient(app, follow_redirects=False)
+    first = browser.get("/?launch=launch-code-for-tests&view=home")
+    assert first.status_code == 302
+    assert first.headers["location"] == "/?view=home"
+    assert first.headers["set-cookie"].startswith(f"cryopilot_session_80={auth.session_value()};")
+    # Used once; a second visit (or another user replaying the URL) gets no cookie.
+    second = browser.get("/?launch=launch-code-for-tests")
+    assert second.status_code != 302 and "set-cookie" not in second.headers
+
+
+def test_launch_code_expires(monkeypatch):
+    monkeypatch.setattr(auth, "LAUNCH_CODE", "launch-code-for-tests")
+    monkeypatch.setattr(auth, "LAUNCH_DEADLINE", auth.time.monotonic() - 1)
+    response = TestClient(app, follow_redirects=False).get("/?launch=launch-code-for-tests")
+    assert response.status_code != 302 and "set-cookie" not in response.headers
+
+
+def test_wrong_tokens_pause_token_checks_but_not_signed_in_browsers(monkeypatch):
+    monkeypatch.setattr(auth, "FAILURE_PAUSE", 60.0)
+    anonymous = TestClient(app)
+    # A browser without a cookie is the normal sign-in gate, not a failed guess.
+    assert anonymous.get("/api/setup").status_code == 401
+    assert anonymous.post("/api/auth/login", json={"token": auth.TOKEN}).status_code == 200
+
+    assert anonymous.post("/api/auth/login", json={"token": "wrong"}).status_code == 401
+    # Within the pause even the right token is not checked.
+    assert anonymous.post("/api/auth/login", json={"token": auth.TOKEN}).status_code == 429
+    assert TestClient(app, headers=HEADERS).get("/api/setup").status_code == 429
+    assert TestClient(app, headers=HEADERS).get("/api/auth/status").json()["authenticated"] is False
+    cookie = {"Cookie": f"cryopilot_session_80={auth.session_value()}"}
+    assert TestClient(app, headers=cookie).get("/api/setup").status_code == 200
+
+    monkeypatch.setattr(auth, "_paused_until", 0.0)
+    assert TestClient(app, headers=HEADERS).get("/api/setup").status_code == 200
+
+
+def test_no_auth_mode_skips_only_the_token(monkeypatch):
+    monkeypatch.setattr(auth, "AUTH_ENABLED", False)
+    assert TestClient(app).get("/api/setup").status_code == 200
+    assert TestClient(app).get("/api/auth/status").json() == {"enabled": False, "authenticated": True}
+
+
+# ------------------------------------------------------------------ server
+def test_transcript_images_are_inline_only_for_raster_types(client, monkeypatch):
+    project = make_project("Images")
+    session = store.create_session(project_id=project["id"], kind="reconstruction", title="Images", harness_session_id="h-images")
+    stored = {"mime": "image/svg+xml", "data": b"<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>"}
+    monkeypatch.setattr(main.trace_reader, "item_image", lambda *_: (stored["mime"], stored["data"]))
+    monkeypatch.setattr(main.trace_reader, "recursive_item_image", lambda *_: (stored["mime"], stored["data"]))
+
+    for url in (f"/api/sessions/{session['id']}/items/1/image/0", f"/api/sessions/{session['id']}/recursive/1/items/1/image/0"):
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/octet-stream"
+        assert response.headers["content-disposition"] == "attachment"
+        assert "sandbox" in response.headers["content-security-policy"]
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    stored.update(mime="image/png", data=b"\x89PNG\r\n\x1a\n")
+    response = client.get(f"/api/sessions/{session['id']}/items/1/image/0")
+    assert response.headers["content-type"] == "image/png"
+    assert "content-disposition" not in response.headers
+    assert response.headers["cache-control"] == "private, max-age=3600"
+
+
+def test_only_hashed_bundles_are_cached_forever(client, tmp_path, monkeypatch):
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "molstar").mkdir()
+    (tmp_path / "index.html").write_text("<!doctype html>")
+    (tmp_path / "assets" / "index-3f2a1b.js").write_text("// bundle")
+    (tmp_path / "molstar" / "molstar.js").write_text("// molstar")
+    monkeypatch.setattr(main, "FRONTEND_DIST", tmp_path)
+    assert client.get("/assets/index-3f2a1b.js").headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert client.get("/molstar/molstar.js").headers["cache-control"] == "no-cache"
+    assert client.get("/").headers["cache-control"] == "no-cache"
+
+
+def test_reconstruction_effort_accepts_none(client):
+    try:
+        response = client.put("/api/settings", json={"defaults": {"reconstruction_effort": "none"}})
+        assert response.status_code == 200
+        assert defaults()["reconstruction_effort"] == "none"
+        assert client.put("/api/settings", json={"defaults": {"modeling_effort": "none"}}).status_code == 422
+    finally:
+        client.put("/api/settings", json={"defaults": {"reconstruction_effort": ""}})
+
+
+# ------------------------------------------------------------------ resume
+def _resume_fixture(monkeypatch, sandbox, *, provider: str | None):
+    project = make_project(f"Resume {provider}")
+    config = {"manifest": {}, "imported": True}
+    if provider:
+        config["agent"] = {"provider": provider}
+    session = store.create_session(
+        project_id=project["id"], kind="reconstruction", title="Imported", harness_session_id="h-not-in-db", config=config, status="stopped"
+    )
+    monkeypatch.setattr(main, "ALLOW_RECONSTRUCTION", True)
+    monkeypatch.setattr(main, "cryosparc_settings", lambda: {"url": "http://localhost:61000", "email": "a@b.c", "password_set": True})
+    key_checks = []
+    monkeypatch.setattr(main, "require_openai_key", lambda: key_checks.append(True))
+    started = {}
+
+    def failing_start(session_id, **kwargs):
+        started.update(kwargs)
+        raise OSError("python not found")
+
+    monkeypatch.setattr(processes, "start_reconstruction", failing_start)
+    return session, key_checks, started
+
+
+def test_resume_uses_the_default_guide_and_reports_a_failed_start(client, monkeypatch, sandbox):
+    store.set_setting("processing_guide", "v5")
+    try:
+        session, key_checks, started = _resume_fixture(monkeypatch, sandbox, provider="ollama")
+        events = bus.subscribe(session["id"])
+        try:
+            response = client.post(f"/api/sessions/{session['id']}/start")
+        finally:
+            bus.unsubscribe(session["id"], events)
+    finally:
+        store.set_setting("processing_guide", "original")
+    assert response.status_code == 500
+    # The imported run used the harness default, whatever Settings says now, and keeps it.
+    assert started["env"]["CRYOEM_GUIDE"] == "original"
+    row = store.get_session(session["id"])
+    assert row["config"]["processing_guide"] == "original"
+    # The session does not stay 'starting' after the driver failed to start.
+    assert row["status"] == "error" and row["last_error"] == "python not found"
+    published = []
+    while True:
+        try:
+            published.append(events.get_nowait())
+        except queue.Empty:
+            break
+    assert [event["state"] for event in published] == ["starting", "error"]
+    assert published[-1]["running"] is False
+    # An Ollama session needs no OpenAI key.
+    assert key_checks == []
+
+
+def test_resume_with_unknown_provider_requires_the_openai_key(client, monkeypatch, sandbox):
+    session, key_checks, _ = _resume_fixture(monkeypatch, sandbox, provider=None)
+    assert client.post(f"/api/sessions/{session['id']}/messages", json={"content": "Continue"}).status_code == 500
+    assert key_checks == [True]
+
+
+def test_import_records_a_given_guide(client, monkeypatch):
+    project = make_project("Import guide")
+    monkeypatch.setattr(main.trace_reader, "session", lambda harness_id: {"manifest": {}, "project_uid": "P1", "workspace_uid": "W1"})
+    imported = client.post(f"/api/projects/{project['id']}/sessions/reconstruction/import", json={"harness_session_id": "h-guide", "processing_guide": "v5"})
+    assert imported.status_code == 200, imported.text
+    assert imported.json()["config"]["processing_guide"] == "v5"
+    refused = client.post(f"/api/projects/{project['id']}/sessions/reconstruction/import", json={"harness_session_id": "h-guide-2", "processing_guide": "v9"})
+    assert refused.status_code == 422
+
+
+# ---------------------------------------------------------- agent environments
+def test_each_agent_gets_only_its_own_account():
+    modeling = driver_env("modeling")
+    assert "OPENAI_API_KEY" in modeling and "CRYOZETA_PASSWORD" in modeling
+    assert not any(name.startswith("CRYOSPARC_") for name in modeling)
+    reconstruction = driver_env("reconstruction", guide="v5")
+    assert reconstruction["CRYOEM_GUIDE"] == "v5" and "CRYOSPARC_PASSWORD" in reconstruction
+    assert not any(name.startswith("CRYOZETA_") for name in reconstruction)
+
+
+def test_cleared_secrets_do_not_come_back_from_the_server_environment(monkeypatch):
+    monkeypatch.setenv("CRYOZETA_PASSWORD", "exported-before-start")
+    monkeypatch.setenv("CRYOSPARC_PASSWORD", "exported-before-start")
+    monkeypatch.setenv("CRYOPILOT_TOKEN", "not-for-agents")
+    env = processes._base_env({"OPENAI_API_KEY": "sk-test", "CRYOZETA_USERNAME": "user", "CRYOZETA_PASSWORD": ""})
+    assert env["OPENAI_API_KEY"] == "sk-test" and env["CRYOZETA_USERNAME"] == "user"
+    for name in ("CRYOZETA_PASSWORD", "CRYOSPARC_PASSWORD", "CRYOPILOT_TOKEN"):
+        assert name not in env
+    assert set(processes_module.MANAGED_ENV) >= {"OPENAI_API_KEY", "CRYOSPARC_EMAIL", "CRYOZETA_BASE_URL"}
+
+
+def test_launch_code_and_cookie_secret_leave_the_environment():
+    assert "CRYOPILOT_LAUNCH_CODE" not in os.environ
+    assert "CRYOPILOT_COOKIE_SECRET" not in os.environ
+
+
+# --------------------------------------------------------------- credentials
+def test_credentials_file_is_private_and_never_written_through_a_planted_link(tmp_path, monkeypatch):
+    for name in ("OPENAI_API_KEY", "CRYOSPARC_PASSWORD", "CRYOZETA_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+    victim = tmp_path / "victim"
+    victim.write_text("")
+    (tmp_path / "credentials.tmp").symlink_to(victim)
+    credentials = Credentials(tmp_path / "credentials.json")
+    credentials.set_remember(True)
+    credentials.set("openai_api_key", "sk-secret")
+
+    assert victim.read_text() == ""
+    saved = tmp_path / "credentials.json"
+    assert stat.S_IMODE(saved.stat().st_mode) == 0o600
+    assert "sk-secret" in saved.read_text()
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["credentials.json", "credentials.tmp", "victim"]
+    assert Credentials(saved).get("openai_api_key") == "sk-secret"
+
+
+def test_app_home_is_private():
+    # A folder an older version (or a permissive umask) left open is closed at startup.
+    config.APP_HOME.chmod(0o755)
+    config.ensure_directories()
+    for path in (config.APP_HOME, config.PROJECTS_DIR):
+        assert stat.S_IMODE(path.stat().st_mode) == 0o700
+
+
+# -------------------------------------------------------------------- serve.py
+def test_port_check_sees_a_held_port():
+    with socket.socket() as holder:
+        holder.bind(("127.0.0.1", 0))
+        holder.listen()
+        port = holder.getsockname()[1]
+        assert serve.port_is_free("127.0.0.1", port) is False
+    assert serve.port_is_free("127.0.0.1", port) is True
+
+
+def test_short_tokens_are_refused(monkeypatch, capsys):
+    monkeypatch.chdir(REPO_ROOT)
+    monkeypatch.setenv("CRYOPILOT_TOKEN", "short")
+    monkeypatch.setenv("CRYOPILOT_BIND_HOST", "127.0.0.1")
+    monkeypatch.setattr(serve, "check_python_dependencies", lambda: None)
+    assert serve.main(["--no-open", "--no-build"]) == 2
+    assert "at least 22 characters" in capsys.readouterr().err

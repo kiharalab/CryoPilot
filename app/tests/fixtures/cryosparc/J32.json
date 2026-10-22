@@ -1,0 +1,67 @@
+{
+ "updated_at": {
+  "$date": "2026-10-14T11:24:06.357Z"
+ },
+ "created_at": {
+  "$date": "2026-10-14T11:23:19.812Z"
+ },
+ "uid": "J32",
+ "project_uid": "P61",
+ "workspace_uids": [
+  "W1"
+ ],
+ "spec": {
+  "type": "sharpen",
+  "outputs": {
+   "volume": {
+    "type": "volume",
+    "title": "Volume",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map_sharp",
+      "dtype": "blob",
+      "versions": [
+       0
+      ],
+      "metafiles": [
+       "J32/J32_map_sharp.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6acf6656e8d262ce0c477154",
+    "summary": {
+     "map_sharp/psize_A": 1.2450000047683716,
+     "map_sharp/shape": [
+      320,
+      320,
+      320
+     ]
+    },
+    "latest_summary_stats": {
+     "b_factor": -117.76522917898647,
+     "version": 0
+    }
+   }
+  }
+ },
+ "job_dir": "J32",
+ "title": "Sharpening Tools - J29 final candidate auto B-factor with J29 FSC mask",
+ "description": "",
+ "status": "completed",
+ "completed_at": {
+  "$date": "2026-10-14T11:24:06.357Z"
+ },
+ "deleted": false,
+ "parents": [
+  "J29"
+ ],
+ "children": [],
+ "is_final_result": false
+}

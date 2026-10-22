@@ -1,0 +1,473 @@
+{
+ "updated_at": {
+  "$date": "2026-10-13T22:14:28.256Z"
+ },
+ "created_at": {
+  "$date": "2026-10-13T21:13:19.700Z"
+ },
+ "uid": "J11",
+ "project_uid": "P61",
+ "workspace_uids": [
+  "W1"
+ ],
+ "spec": {
+  "type": "hetero_refine",
+  "outputs": {
+   "volumes_all_classes": {
+    "type": "volume_multi",
+    "title": "All volumes",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_00162_volume_series.cs"
+      ],
+      "num_items": [
+       4
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "series",
+      "dtype": "series",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_00162_volume_series.cs"
+      ],
+      "num_items": [
+       4
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_sharp",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_00162_sharp_volume_series.cs"
+      ],
+      "num_items": [
+       4
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "series_sharp",
+      "dtype": "series",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_00162_sharp_volume_series.cs"
+      ],
+      "num_items": [
+       4
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "classification_info",
+      "dtype": "classification_info",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_00162_sharp_volume_series.cs"
+      ],
+      "num_items": [
+       4
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "fsc_info_nomask",
+      "dtype": "fsc_info",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_00162_sharp_volume_series.cs"
+      ],
+      "num_items": [
+       4
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 4,
+    "image": null,
+    "summary": {
+     "classification_info/type": "hetero_refine",
+     "fsc_info_nomask/box_size": 160,
+     "fsc_info_nomask/psize_A": 2.490000009536743,
+     "fsc_info_nomask/type": "nomask",
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ],
+     "series/count": 4,
+     "series/psize_A": 2.490000009536743,
+     "series/shape": [
+      160,
+      160,
+      160
+     ],
+     "series/type": "zip",
+     "map_sharp/psize_A": 2.490000009536743,
+     "map_sharp/shape": [
+      160,
+      160,
+      160
+     ],
+     "series_sharp/count": 4,
+     "series_sharp/psize_A": 2.490000009536743,
+     "series_sharp/shape": [
+      160,
+      160,
+      160
+     ],
+     "series_sharp/type": "zip"
+    },
+    "latest_summary_stats": {}
+   },
+   "volume_class_0": {
+    "type": "volume",
+    "title": "Volume class 0",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_class_00_00162_volume.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_sharp",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_class_00_00162_volume_sharp.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6acead3934126238e8757626",
+    "summary": {
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ],
+     "map_sharp/psize_A": 2.490000009536743,
+     "map_sharp/shape": [
+      160,
+      160,
+      160
+     ]
+    },
+    "latest_summary_stats": {
+     "N": 160,
+     "effective_class_size": 113198.0,
+     "extent": 398.4000015258789,
+     "mean_class_ESS": 1.0,
+     "psize": 2.490000009536743,
+     "radwn_final": 39.27816852804765,
+     "radwn_final_A": 10.143039160326188,
+     "radwn_loosemask": 41.77546652056255,
+     "radwn_loosemask_05": 37.63075189645853,
+     "radwn_loosemask_05_A": 10.587085865891847,
+     "radwn_loosemask_A": 9.536697844649563,
+     "radwn_nomask": 35.83349342950284,
+     "radwn_nomask_05": 32.13621839424166,
+     "radwn_nomask_05_A": 12.39722722314043,
+     "radwn_nomask_A": 11.118089904063435,
+     "radwn_resmask": 39.27816852804765,
+     "radwn_resmask_05": 37.02911509571265,
+     "radwn_resmask_05_A": 10.75910133137389,
+     "radwn_resmask_A": 10.143039160326188,
+     "radwn_sphericalmask": 37.19040335344927,
+     "radwn_sphericalmask_05": 34.00471238957385,
+     "radwn_sphericalmask_05_A": 11.716023266470325,
+     "radwn_sphericalmask_A": 10.712440995586267,
+     "version": 162
+    }
+   },
+   "volume_class_1": {
+    "type": "volume",
+    "title": "Volume class 1",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_class_01_00162_volume.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_sharp",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_class_01_00162_volume_sharp.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6acead3a34126238e8757628",
+    "summary": {
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ],
+     "map_sharp/psize_A": 2.490000009536743,
+     "map_sharp/shape": [
+      160,
+      160,
+      160
+     ]
+    },
+    "latest_summary_stats": {
+     "N": 160,
+     "effective_class_size": 225548.0,
+     "extent": 398.4000015258789,
+     "mean_class_ESS": 1.0,
+     "psize": 2.490000009536743,
+     "radwn_final": 78.5,
+     "radwn_final_A": 5.075159255106738,
+     "radwn_loosemask": 78.5,
+     "radwn_loosemask_05": 65.21663436835966,
+     "radwn_loosemask_05_A": 6.10887092510198,
+     "radwn_loosemask_A": 5.075159255106738,
+     "radwn_nomask": 54.28603752046533,
+     "radwn_nomask_05": 46.55612496720983,
+     "radwn_nomask_05_A": 8.557413268532935,
+     "radwn_nomask_A": 7.3389036983162725,
+     "radwn_resmask": 78.5,
+     "radwn_resmask_05": 72.59273682360279,
+     "radwn_resmask_05_A": 5.48815238215875,
+     "radwn_resmask_A": 5.075159255106738,
+     "radwn_sphericalmask": 64.35413622571235,
+     "radwn_sphericalmask_05": 51.32350773244453,
+     "radwn_sphericalmask_05_A": 7.762524798631942,
+     "radwn_sphericalmask_A": 6.190744292310154,
+     "version": 162
+    }
+   },
+   "volume_class_2": {
+    "type": "volume",
+    "title": "Volume class 2",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_class_02_00162_volume.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_sharp",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_class_02_00162_volume_sharp.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6acead3a34126238e875762a",
+    "summary": {
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ],
+     "map_sharp/psize_A": 2.490000009536743,
+     "map_sharp/shape": [
+      160,
+      160,
+      160
+     ]
+    },
+    "latest_summary_stats": {
+     "N": 160,
+     "effective_class_size": 118110.0,
+     "extent": 398.4000015258789,
+     "mean_class_ESS": 1.0,
+     "psize": 2.490000009536743,
+     "radwn_final": 39.644677010874354,
+     "radwn_final_A": 10.049268440668582,
+     "radwn_loosemask": 41.29374277574413,
+     "radwn_loosemask_05": 38.07419173835242,
+     "radwn_loosemask_05_A": 10.463780932336054,
+     "radwn_loosemask_A": 9.647950869687172,
+     "radwn_nomask": 36.31366818838056,
+     "radwn_nomask_05": 31.687731100649934,
+     "radwn_nomask_05_A": 12.572689419145807,
+     "radwn_nomask_A": 10.971075669335896,
+     "radwn_resmask": 39.644677010874354,
+     "radwn_resmask_05": 37.16047475758198,
+     "radwn_resmask_05_A": 10.72106866569545,
+     "radwn_resmask_A": 10.049268440668582,
+     "radwn_sphericalmask": 37.264123527941976,
+     "radwn_sphericalmask_05": 33.64958936489629,
+     "radwn_sphericalmask_05_A": 11.839669043376059,
+     "radwn_sphericalmask_A": 10.691248412890868,
+     "version": 162
+    }
+   },
+   "volume_class_3": {
+    "type": "volume",
+    "title": "Volume class 3",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_class_03_00162_volume.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_sharp",
+      "dtype": "blob",
+      "versions": [
+       162
+      ],
+      "metafiles": [
+       "J11/J11_class_03_00162_volume_sharp.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6acead3a34126238e875762c",
+    "summary": {
+     "map/psize_A": 2.490000009536743,
+     "map/shape": [
+      160,
+      160,
+      160
+     ],
+     "map_sharp/psize_A": 2.490000009536743,
+     "map_sharp/shape": [
+      160,
+      160,
+      160
+     ]
+    },
+    "latest_summary_stats": {
+     "N": 160,
+     "effective_class_size": 113044.0,
+     "extent": 398.4000015258789,
+     "mean_class_ESS": 1.0,
+     "psize": 2.490000009536743,
+     "radwn_final": 59.07915484959394,
+     "radwn_final_A": 6.743495274096954,
+     "radwn_loosemask": 56.45262638165865,
+     "radwn_loosemask_05": 53.77035211730668,
+     "radwn_loosemask_05_A": 7.409287569043997,
+     "radwn_loosemask_A": 7.057244756557832,
+     "radwn_nomask": 52.654824814871226,
+     "radwn_nomask_05": 41.9458821518073,
+     "radwn_nomask_05_A": 9.497952625814863,
+     "radwn_nomask_A": 7.5662582285025355,
+     "radwn_resmask": 59.07915484959394,
+     "radwn_resmask_05": 53.98536557543549,
+     "radwn_resmask_05_A": 7.379777783836284,
+     "radwn_resmask_A": 6.743495274096954,
+     "radwn_sphericalmask": 53.93517394928266,
+     "radwn_sphericalmask_05": 43.81991633257007,
+     "radwn_sphericalmask_05_A": 9.091756326101422,
+     "radwn_sphericalmask_A": 7.386645343918051,
+     "version": 162
+    }
+   }
+  }
+ },
+ "job_dir": "J11",
+ "title": "Heterogeneous Refinement C3 - J8 broad selected, J10 4 refs, hard classes",
+ "description": "",
+ "status": "completed",
+ "completed_at": {
+  "$date": "2026-10-13T22:14:28.256Z"
+ },
+ "deleted": false,
+ "parents": [
+  "J8",
+  "J10"
+ ],
+ "children": [],
+ "is_final_result": false
+}

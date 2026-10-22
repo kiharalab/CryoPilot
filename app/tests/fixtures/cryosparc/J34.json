@@ -1,0 +1,64 @@
+{
+ "updated_at": {
+  "$date": "2026-10-14T11:27:33.818Z"
+ },
+ "created_at": {
+  "$date": "2026-10-14T11:26:57.696Z"
+ },
+ "uid": "J34",
+ "project_uid": "P61",
+ "workspace_uids": [
+  "W1"
+ ],
+ "spec": {
+  "type": "local_filter",
+  "outputs": {
+   "volume": {
+    "type": "volume",
+    "title": "Filtered volume",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map_filtered",
+      "dtype": "blob",
+      "versions": [
+       0
+      ],
+      "metafiles": [
+       "J34/J34_localfilter.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6acf672501bbcabc362bd823",
+    "summary": {
+     "map_filtered/psize_A": 1.2450000047683716,
+     "map_filtered/shape": [
+      320,
+      320,
+      320
+     ]
+    },
+    "latest_summary_stats": {}
+   }
+  }
+ },
+ "job_dir": "J34",
+ "title": "Local Filtering - J29 final candidate using J33 local resolution",
+ "description": "",
+ "status": "completed",
+ "completed_at": {
+  "$date": "2026-10-14T11:27:33.818Z"
+ },
+ "deleted": false,
+ "parents": [
+  "J33"
+ ],
+ "children": [],
+ "is_final_result": false
+}

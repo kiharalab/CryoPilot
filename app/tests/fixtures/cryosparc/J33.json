@@ -1,0 +1,124 @@
+{
+ "updated_at": {
+  "$date": "2026-10-14T11:25:48.449Z"
+ },
+ "created_at": {
+  "$date": "2026-10-14T11:24:31.846Z"
+ },
+ "uid": "J33",
+ "project_uid": "P61",
+ "workspace_uids": [
+  "W1"
+ ],
+ "spec": {
+  "type": "local_resolution",
+  "outputs": {
+   "volume": {
+    "type": "volume",
+    "title": "Local resolution volume",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map_half_A",
+      "dtype": "blob",
+      "versions": [
+       0
+      ],
+      "metafiles": [
+       "J33/J33_map_half_A.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_half_B",
+      "dtype": "blob",
+      "versions": [
+       0
+      ],
+      "metafiles": [
+       "J33/J33_map_half_B.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_locres",
+      "dtype": "blob",
+      "versions": [
+       0
+      ],
+      "metafiles": [
+       "J33/J33_map_locres.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "mask_refine",
+      "dtype": "blob",
+      "versions": [
+       0
+      ],
+      "metafiles": [
+       "J33/J33_mask_refine.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6acf66b9d0c906cb323473d8",
+    "summary": {
+     "map_locres/psize_A": 1.2450000047683716,
+     "map_locres/shape": [
+      320,
+      320,
+      320
+     ],
+     "map_half_A/psize_A": 1.2450000047683716,
+     "map_half_A/shape": [
+      320,
+      320,
+      320
+     ],
+     "map_half_B/psize_A": 1.2450000047683716,
+     "map_half_B/shape": [
+      320,
+      320,
+      320
+     ],
+     "mask_refine/psize_A": 1.2450000047683716,
+     "mask_refine/shape": [
+      320,
+      320,
+      320
+     ]
+    },
+    "latest_summary_stats": {}
+   }
+  }
+ },
+ "job_dir": "J33",
+ "title": "Local Resolution Estimation - J29 final candidate with J29 FSC mask",
+ "description": "",
+ "status": "completed",
+ "completed_at": {
+  "$date": "2026-10-14T11:25:48.449Z"
+ },
+ "deleted": false,
+ "parents": [
+  "J29"
+ ],
+ "children": [],
+ "is_final_result": false
+}

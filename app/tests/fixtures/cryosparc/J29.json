@@ -1,0 +1,460 @@
+{
+ "updated_at": {
+  "$date": "2026-10-14T11:18:35.881Z"
+ },
+ "created_at": {
+  "$date": "2026-10-14T10:53:03.821Z"
+ },
+ "uid": "J29",
+ "project_uid": "P61",
+ "workspace_uids": [
+  "W1"
+ ],
+ "spec": {
+  "type": "nonuniform_refine_new",
+  "outputs": {
+   "volume": {
+    "type": "volume",
+    "title": "Refined volume",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map",
+      "dtype": "blob",
+      "versions": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ],
+      "metafiles": [
+       "J29/J29_000_volume_map.cs",
+       "J29/J29_001_volume_map.cs",
+       "J29/J29_002_volume_map.cs",
+       "J29/J29_003_volume_map.cs",
+       "J29/J29_004_volume_map.cs",
+       "J29/J29_005_volume_map.cs",
+       "J29/J29_006_volume_map.cs",
+       "J29/J29_007_volume_map.cs",
+       "J29/J29_008_volume_map.cs",
+       "J29/J29_009_volume_map.cs"
+      ],
+      "num_items": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_sharp",
+      "dtype": "blob",
+      "versions": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ],
+      "metafiles": [
+       "J29/J29_000_volume_map_sharp.cs",
+       "J29/J29_001_volume_map_sharp.cs",
+       "J29/J29_002_volume_map_sharp.cs",
+       "J29/J29_003_volume_map_sharp.cs",
+       "J29/J29_004_volume_map_sharp.cs",
+       "J29/J29_005_volume_map_sharp.cs",
+       "J29/J29_006_volume_map_sharp.cs",
+       "J29/J29_007_volume_map_sharp.cs",
+       "J29/J29_008_volume_map_sharp.cs",
+       "J29/J29_009_volume_map_sharp.cs"
+      ],
+      "num_items": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_half_A",
+      "dtype": "blob",
+      "versions": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ],
+      "metafiles": [
+       "J29/J29_000_volume_map_half_A.cs",
+       "J29/J29_001_volume_map_half_A.cs",
+       "J29/J29_002_volume_map_half_A.cs",
+       "J29/J29_003_volume_map_half_A.cs",
+       "J29/J29_004_volume_map_half_A.cs",
+       "J29/J29_005_volume_map_half_A.cs",
+       "J29/J29_006_volume_map_half_A.cs",
+       "J29/J29_007_volume_map_half_A.cs",
+       "J29/J29_008_volume_map_half_A.cs",
+       "J29/J29_009_volume_map_half_A.cs"
+      ],
+      "num_items": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_half_B",
+      "dtype": "blob",
+      "versions": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ],
+      "metafiles": [
+       "J29/J29_000_volume_map_half_B.cs",
+       "J29/J29_001_volume_map_half_B.cs",
+       "J29/J29_002_volume_map_half_B.cs",
+       "J29/J29_003_volume_map_half_B.cs",
+       "J29/J29_004_volume_map_half_B.cs",
+       "J29/J29_005_volume_map_half_B.cs",
+       "J29/J29_006_volume_map_half_B.cs",
+       "J29/J29_007_volume_map_half_B.cs",
+       "J29/J29_008_volume_map_half_B.cs",
+       "J29/J29_009_volume_map_half_B.cs"
+      ],
+      "num_items": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "mask_refine",
+      "dtype": "blob",
+      "versions": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ],
+      "metafiles": [
+       "J29/J29_000_volume_mask_refine.cs",
+       "J29/J29_001_volume_mask_refine.cs",
+       "J29/J29_002_volume_mask_refine.cs",
+       "J29/J29_003_volume_mask_refine.cs",
+       "J29/J29_004_volume_mask_refine.cs",
+       "J29/J29_005_volume_mask_refine.cs",
+       "J29/J29_006_volume_mask_refine.cs",
+       "J29/J29_007_volume_mask_refine.cs",
+       "J29/J29_008_volume_mask_refine.cs",
+       "J29/J29_009_volume_mask_refine.cs"
+      ],
+      "num_items": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "mask_fsc",
+      "dtype": "blob",
+      "versions": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ],
+      "metafiles": [
+       "J29/J29_000_volume_mask_fsc.cs",
+       "J29/J29_001_volume_mask_fsc.cs",
+       "J29/J29_002_volume_mask_fsc.cs",
+       "J29/J29_003_volume_mask_fsc.cs",
+       "J29/J29_004_volume_mask_fsc.cs",
+       "J29/J29_005_volume_mask_fsc.cs",
+       "J29/J29_006_volume_mask_fsc.cs",
+       "J29/J29_007_volume_mask_fsc.cs",
+       "J29/J29_008_volume_mask_fsc.cs",
+       "J29/J29_009_volume_mask_fsc.cs"
+      ],
+      "num_items": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "mask_fsc_auto",
+      "dtype": "blob",
+      "versions": [
+       9
+      ],
+      "metafiles": [
+       "J29/J29_009_volume_mask_fsc_auto.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "precision",
+      "dtype": "blob",
+      "versions": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9
+      ],
+      "metafiles": [
+       "J29/J29_000_volume_precision.cs",
+       "J29/J29_001_volume_precision.cs",
+       "J29/J29_002_volume_precision.cs",
+       "J29/J29_003_volume_precision.cs",
+       "J29/J29_004_volume_precision.cs",
+       "J29/J29_005_volume_precision.cs",
+       "J29/J29_006_volume_precision.cs",
+       "J29/J29_007_volume_precision.cs",
+       "J29/J29_008_volume_precision.cs",
+       "J29/J29_009_volume_precision.cs"
+      ],
+      "num_items": [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": "6acf6502a5b3d25f8643566f",
+    "summary": {
+     "map/psize_A": 1.2450000047683716,
+     "map/shape": [
+      320,
+      320,
+      320
+     ],
+     "map_sharp/psize_A": 1.2450000047683716,
+     "map_sharp/shape": [
+      320,
+      320,
+      320
+     ],
+     "map_half_A/psize_A": 1.2450000047683716,
+     "map_half_A/shape": [
+      320,
+      320,
+      320
+     ],
+     "map_half_B/psize_A": 1.2450000047683716,
+     "map_half_B/shape": [
+      320,
+      320,
+      320
+     ],
+     "mask_refine/psize_A": 1.2450000047683716,
+     "mask_refine/shape": [
+      320,
+      320,
+      320
+     ],
+     "mask_fsc/psize_A": 1.2450000047683716,
+     "mask_fsc/shape": [
+      320,
+      320,
+      320
+     ],
+     "precision/psize_A": 1.2450000047683716,
+     "precision/shape": [
+      320,
+      320,
+      161
+     ],
+     "mask_fsc_auto/psize_A": 1.2450000047683716,
+     "mask_fsc_auto/shape": [
+      320,
+      320,
+      320
+     ]
+    },
+    "latest_summary_stats": {
+     "cfar": 0.7715139389038086,
+     "extent": 398.4000015258789,
+     "fsc_info": {
+      "N": 320,
+      "psize": 1.2450000047683716,
+      "radwn_nomask_A": 3.590509178744483,
+      "radwn_nomask": 110.95919316524072,
+      "radwn_nomask_05_A": 4.041869172053062,
+      "radwn_nomask_05": 98.56825754790876,
+      "radwn_sphericalmask_A": 3.46668519812054,
+      "radwn_sphericalmask": 114.92246303237198,
+      "radwn_sphericalmask_05_A": 3.8969926576403724,
+      "radwn_sphericalmask_05": 102.23267953681749,
+      "radwn_loosemask_A": 3.2438149529027656,
+      "radwn_loosemask": 122.81835040231442,
+      "radwn_loosemask_05_A": 3.6409660081609765,
+      "radwn_loosemask_05": 109.42151083885226,
+      "radwn_resmask_A": 3.122770998812286,
+      "radwn_resmask": 127.57900008595132,
+      "radwn_resmask_05_A": 3.5332093776043134,
+      "radwn_resmask_05": 112.75867319134463,
+      "radwn_final_A": 3.089455484285336,
+      "radwn_final": 128.95476356670608,
+      "radwn_autotight": 129.62466774138485,
+      "radwn_autotight_05": 113.17143055815895,
+      "radwn_autotight_05_A": 3.520323102402957,
+      "radwn_autotight_A": 3.073489085586161,
+      "radwn_autotight_noisesub": 128.95476356670608,
+      "radwn_autotight_noisesub_05": 112.25534091613676,
+      "radwn_autotight_noisesub_05_A": 3.549051637761395,
+      "radwn_autotight_noisesub_A": 3.089455484285336
+     },
+     "fsc_info_best": {
+      "N": 320,
+      "psize": 1.2450000047683716,
+      "radwn_nomask_A": 3.590509178744483,
+      "radwn_nomask": 110.95919316524072,
+      "radwn_nomask_05_A": 4.041869172053062,
+      "radwn_nomask_05": 98.56825754790876,
+      "radwn_sphericalmask_A": 3.46668519812054,
+      "radwn_sphericalmask": 114.92246303237198,
+      "radwn_sphericalmask_05_A": 3.8969926576403724,
+      "radwn_sphericalmask_05": 102.23267953681749,
+      "radwn_loosemask_A": 3.2438149529027656,
+      "radwn_loosemask": 122.81835040231442,
+      "radwn_loosemask_05_A": 3.6409660081609765,
+      "radwn_loosemask_05": 109.42151083885226,
+      "radwn_resmask_A": 3.122770998812286,
+      "radwn_resmask": 127.57900008595132,
+      "radwn_resmask_05_A": 3.5332093776043134,
+      "radwn_resmask_05": 112.75867319134463,
+      "radwn_final_A": 3.089455484285336,
+      "radwn_final": 128.95476356670608,
+      "radwn_autotight": 129.62466774138485,
+      "radwn_autotight_05": 113.17143055815895,
+      "radwn_autotight_05_A": 3.520323102402957,
+      "radwn_autotight_A": 3.073489085586161,
+      "radwn_autotight_noisesub": 128.95476356670608,
+      "radwn_autotight_noisesub_05": 112.25534091613676,
+      "radwn_autotight_noisesub_05_A": 3.549051637761395,
+      "radwn_autotight_noisesub_A": 3.089455484285336
+     },
+     "guinier_bfactor": -78.71731442450815,
+     "processed_fraction": 1.0,
+     "version": 9
+    }
+   }
+  }
+ },
+ "job_dir": "J29",
+ "title": "Non-uniform Refinement C3 - after J27/J28 Global+Local CTF refinement",
+ "description": "",
+ "status": "completed",
+ "completed_at": {
+  "$date": "2026-10-14T11:18:35.881Z"
+ },
+ "deleted": false,
+ "parents": [
+  "J28",
+  "J25"
+ ],
+ "children": [],
+ "is_final_result": false
+}

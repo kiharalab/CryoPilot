@@ -1,0 +1,457 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "@xterm/xterm/css/xterm.css";
+
+/* Dark mode follows <html data-theme="dark">, set before first paint in index.html. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/*
+ * Design tokens. Components use the semantic utilities below (bg-canvas,
+ * text-muted, border-line, bg-accent, ...) and never raw hex colours, so both
+ * themes come from these two blocks.
+ */
+:root {
+  --canvas: #ffffff;
+  --sidebar: #f6f7f8;
+  --subtle: #f1f3f5;
+  --hover: #eceef1;
+  --elevated: #ffffff;
+  --inset: #f7f8f9;
+  --line: #e4e7eb;
+  --line-strong: #cfd4da;
+  --fg: #12151a;
+  /* In both themes, muted and faint text keep 4.5:1 or more on every background colour above. */
+  --muted: #4b525c;
+  --faint: #656c76;
+  --accent: #0b7a88;
+  --accent-hover: #096b78;
+  --accent-fg: #ffffff;
+  --accent-soft: #e2f1f3;
+  --accent-text: #0a6c78;
+  --danger: #c4383a;
+  --danger-fg: #ffffff;
+  --danger-soft: #fbeaea;
+  --success: #1f7f55;
+  --success-soft: #e6f4ec;
+  --warning: #a86d12;
+  --warning-soft: #fbf1df;
+  --thumb: #ffffff;
+  --overlay: rgb(15 18 22 / 0.42);
+  --shadow-popover: 0 1px 2px rgb(16 20 26 / 0.06), 0 8px 24px -6px rgb(16 20 26 / 0.16);
+  --shadow-dialog: 0 2px 6px rgb(16 20 26 / 0.06), 0 24px 64px -12px rgb(16 20 26 / 0.28);
+  --shadow-composer: 0 1px 2px rgb(16 20 26 / 0.04), 0 6px 20px -8px rgb(16 20 26 / 0.12);
+  --viewer-bg: #f7f8f9;
+  /* DAQ: low scores red, high scores blue, around a light midpoint on the 3D model. */
+  --daq-neg: #e34948;
+  --daq-pos: #2a78d6;
+  --daq-model-mid: #f0efec;
+  --code-keyword: #8b3fb5;
+  --code-string: #1c7c4d;
+  --code-number: #a5560f;
+  --code-comment: #8a929c;
+  --code-function: #1d5fc2;
+  --code-builtin: #b23b72;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --canvas: #17181b;
+  --sidebar: #111214;
+  --subtle: #1f2124;
+  --hover: #26292d;
+  --elevated: #1e2023;
+  --inset: #131416;
+  --line: #2a2d31;
+  --line-strong: #3a3e44;
+  --fg: #eceef0;
+  --muted: #b1b7be;
+  --faint: #8b929b;
+  --accent: #3cb6c4;
+  --accent-hover: #58c5d1;
+  --accent-fg: #071417;
+  --accent-soft: rgb(60 182 196 / 0.13);
+  --accent-text: #6fcfda;
+  --danger: #ef6f6a;
+  --danger-fg: #1a0706;
+  --danger-soft: rgb(239 111 106 / 0.12);
+  --success: #4cc28a;
+  --success-soft: rgb(76 194 138 / 0.12);
+  --warning: #e0a948;
+  --warning-soft: rgb(224 169 72 / 0.12);
+  --overlay: rgb(0 0 0 / 0.55);
+  --shadow-popover: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -6px rgb(0 0 0 / 0.5);
+  --shadow-dialog: 0 2px 6px rgb(0 0 0 / 0.3), 0 28px 72px -12px rgb(0 0 0 / 0.65);
+  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.25), 0 8px 24px -10px rgb(0 0 0 / 0.5);
+  --viewer-bg: #121315;
+  --daq-neg: #e66767;
+  --daq-pos: #3987e5;
+  --daq-model-mid: #f0efec;
+  --code-keyword: #d19af0;
+  --code-string: #8fd6a8;
+  --code-number: #f0b47a;
+  --code-comment: #6f7781;
+  --code-function: #8ab4f8;
+  --code-builtin: #f28fb8;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-canvas: var(--canvas);
+  --color-sidebar: var(--sidebar);
+  --color-subtle: var(--subtle);
+  --color-hover: var(--hover);
+  --color-elevated: var(--elevated);
+  --color-inset: var(--inset);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-thumb: var(--thumb);
+  --color-overlay: var(--overlay);
+
+  --shadow-popover: var(--shadow-popover);
+  --shadow-dialog: var(--shadow-dialog);
+  --shadow-composer: var(--shadow-composer);
+
+  --text-2xs: 11px;
+  --text-2xs--line-height: 15px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 19px;
+  --text-base: 14px;
+  --text-base--line-height: 21px;
+  --text-md: 15px;
+  --text-md--line-height: 24px;
+  --text-lg: 17px;
+  --text-lg--line-height: 25px;
+  --text-xl: 21px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 28px;
+  --text-2xl--line-height: 34px;
+
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.2s linear infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    overflow: hidden;
+    background: var(--canvas);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 21px;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  * {
+    border-color: var(--line);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+    outline-offset: 2px;
+  }
+
+  button {
+    cursor: default;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Thin, quiet scrollbars everywhere. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Prose for agent answers, guides, and Markdown previews. */
+.prose {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.prose > :first-child {
+  margin-top: 0;
+}
+.prose > :last-child {
+  margin-bottom: 0;
+}
+.prose p,
+.prose ul,
+.prose ol,
+.prose pre,
+.prose table,
+.prose blockquote {
+  margin: 0 0 0.85em;
+}
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin: 1.4em 0 0.5em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.prose h1 {
+  font-size: 1.35em;
+}
+.prose h2 {
+  font-size: 1.18em;
+}
+.prose h3 {
+  font-size: 1.05em;
+}
+.prose h4 {
+  font-size: 1em;
+}
+.prose ul,
+.prose ol {
+  padding-left: 1.35em;
+}
+.prose ul {
+  list-style: disc;
+}
+.prose ol {
+  list-style: decimal;
+}
+.prose li {
+  margin: 0.2em 0;
+}
+.prose li::marker {
+  color: var(--faint);
+}
+.prose a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent-text) 35%, transparent);
+  text-underline-offset: 2px;
+}
+.prose strong {
+  font-weight: 600;
+}
+.prose :not(pre) > code {
+  font-size: 0.86em;
+  padding: 0.12em 0.36em;
+  border-radius: 5px;
+  background: var(--subtle);
+  border: 1px solid var(--line);
+}
+.prose blockquote {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 0.9em;
+  color: var(--muted);
+}
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.4em 0;
+}
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.prose table {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.prose th,
+.prose td {
+  min-width: 7ch;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 12px 6px 0;
+  text-align: left;
+  vertical-align: top;
+}
+.prose th {
+  font-weight: 600;
+  color: var(--muted);
+}
+.prose-sm {
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+/* highlight.js token colours (see lib/highlight.js). */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal {
+  color: var(--code-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--code-string);
+}
+.hljs-number,
+.hljs-symbol {
+  color: var(--code-number);
+}
+.hljs-comment,
+.hljs-quote,
+.hljs-meta {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--code-function);
+}
+.hljs-built_in,
+.hljs-type,
+.hljs-attr,
+.hljs-variable.language_ {
+  color: var(--code-builtin);
+}
+.hljs-deletion {
+  color: var(--danger);
+}
+
+/* Mol* fills whatever box hosts it. */
+.molstar-host {
+  position: absolute;
+  inset: 0;
+}
+.molstar-host .msp-plugin {
+  font-family: var(--font-sans);
+}
+
+/* Resizable panel separators (react-resizable-panels). */
+.resize-handle {
+  position: relative;
+  flex: 0 0 1px;
+  background: var(--line);
+  outline: none;
+}
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0 -3px;
+  z-index: 10;
+}
+.resize-handle[aria-orientation="horizontal"]::after {
+  inset: -3px 0;
+}
+.resize-handle:hover,
+.resize-handle[data-separator="hover"],
+.resize-handle[data-separator="active"],
+.resize-handle[data-separator="focus"] {
+  background: var(--accent);
+}
+
+/* xterm fills its host. */
+.terminal-host .xterm {
+  height: 100%;
+  padding: 6px 0 0 10px;
+}
+.terminal-host .xterm-viewport {
+  background: transparent !important;
+}
+
+/* A tab strip that scrolls sideways fades out at each edge that hides tabs. */
+.fade-start {
+  mask-image: linear-gradient(to right, transparent, #000 24px);
+}
+.fade-end {
+  mask-image: linear-gradient(to left, transparent, #000 24px);
+}
+.fade-start.fade-end {
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}

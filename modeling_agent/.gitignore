@@ -1,0 +1,8 @@
+.venv/
+.deps/
+__pycache__/
+*.py[cod]
+outputs/*
+!outputs/.gitkeep
+data/*.map
+data/*.map.gz

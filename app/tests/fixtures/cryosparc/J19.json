@@ -1,0 +1,69 @@
+{
+ "updated_at": {
+  "$date": "2026-10-14T02:39:51.095Z"
+ },
+ "created_at": {
+  "$date": "2026-10-14T02:38:27.714Z"
+ },
+ "uid": "J19",
+ "project_uid": "P61",
+ "workspace_uids": [
+  "W1"
+ ],
+ "spec": {
+  "type": "orientation_diagnostics",
+  "outputs": {
+   "volume_3DFSC": {
+    "type": "volume",
+    "title": "3DFSC volume",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map_3DFSC",
+      "dtype": "blob",
+      "versions": [
+       0
+      ],
+      "metafiles": [
+       "J19/J19_map_3DFSC.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": null,
+    "summary": {
+     "map_3DFSC/psize_A": 2.490000009536743,
+     "map_3DFSC/shape": [
+      160,
+      160,
+      160
+     ]
+    },
+    "latest_summary_stats": {
+     "cfar": 0.7604538202285767,
+     "scf_star": 0.997498419514046,
+     "tfar": 0.7982046008110046,
+     "version": 0
+    }
+   }
+  }
+ },
+ "job_dir": "J19",
+ "title": "Orientation Diagnostics - J12 C3 homogeneous refinement",
+ "description": "",
+ "status": "completed",
+ "completed_at": {
+  "$date": "2026-10-14T02:39:51.095Z"
+ },
+ "deleted": false,
+ "parents": [
+  "J12"
+ ],
+ "children": [],
+ "is_final_result": false
+}

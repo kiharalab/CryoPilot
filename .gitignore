@@ -1,0 +1,71 @@
+# The reconstruction agent writes images, reports, and scratch folders into
+# the directory it runs from. Ignore every top-level folder except the code
+# folders, and top-level images and session reports.
+/*/
+!/app/
+!/modeling_agent/
+!/tests/
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.svg
+/*.pdf
+/session_*_report*.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments and secrets
+.venv/
+venv/
+env/
+.conda/
+.env
+.env.*
+!.env.example
+
+# Web frontend: installed packages, the build, and the Mol* bundle copied at build time
+node_modules/
+/app/frontend/dist/
+/app/frontend/public/molstar/
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Cryo-EM data and CryoSPARC outputs
+J[0-9]*/
+P[0-9]*/
+*.mrc
+*.mrcs
+*.map
+*.map.gz
+*.star
+*.cs
+*.csg
+*.tif
+*.tiff
+*.eer
+
+# Modeling agent: built programs, web app workspaces, and runs started from the terminal
+/modeling_agent/.deps/
+/modeling_agent/workspaces/
+/modeling_agent/modelling_results/
+/modeling_agent/modeling_*/
+
+# Build output
+/build/

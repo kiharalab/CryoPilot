@@ -1,0 +1,87 @@
+{
+ "updated_at": {
+  "$date": "2026-10-14T11:22:55.199Z"
+ },
+ "created_at": {
+  "$date": "2026-10-14T11:22:23.019Z"
+ },
+ "uid": "J31",
+ "project_uid": "P61",
+ "workspace_uids": [
+  "W1"
+ ],
+ "spec": {
+  "type": "validation",
+  "outputs": {
+   "volume": {
+    "type": "volume",
+    "title": "Volume",
+    "description": "",
+    "passthrough": null,
+    "results": [
+     {
+      "name": "map_half_A",
+      "dtype": "blob",
+      "versions": [
+       0
+      ],
+      "metafiles": [
+       "J31/J31_map_half_A.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     },
+     {
+      "name": "map_half_B",
+      "dtype": "blob",
+      "versions": [
+       0
+      ],
+      "metafiles": [
+       "J31/J31_map_half_B.cs"
+      ],
+      "num_items": [
+       1
+      ],
+      "passthrough": false
+     }
+    ],
+    "num_items": 1,
+    "image": null,
+    "summary": {
+     "map_half_A/psize_A": 1.2450000047683716,
+     "map_half_A/shape": [
+      320,
+      320,
+      320
+     ],
+     "map_half_B/psize_A": 1.2450000047683716,
+     "map_half_B/shape": [
+      320,
+      320,
+      320
+     ]
+    },
+    "latest_summary_stats": {
+     "fsc_resolution": 3.0982706123992787,
+     "version": 0
+    }
+   }
+  }
+ },
+ "job_dir": "J31",
+ "title": "Validation FSC - J29 final candidate with J29 auto-tight mask",
+ "description": "",
+ "status": "completed",
+ "completed_at": {
+  "$date": "2026-10-14T11:22:55.199Z"
+ },
+ "deleted": false,
+ "parents": [
+  "J29"
+ ],
+ "children": [],
+ "is_final_result": false
+}
