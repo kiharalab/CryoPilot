@@ -114,7 +114,7 @@ chmod +x cryopilot-<version>-linux-x86_64
 ./cryopilot-<version>-linux-x86_64
 ```
 
-The binary is one file that contains both agents, the web application, the DAQ model, VESPER, and ripgrep. It does not need Python or Node.js. Install PyMOL, ChimeraX, Phenix, and Rosetta separately for modeling. The first start unpacks the program into `~/.cache/cryopilot/<version>/`, which takes about a minute; later starts reuse it.
+The binary is one file that contains both agents, the web application, the DAQ model, VESPER, and ripgrep. It does not need Python or Node.js. Install PyMOL, ChimeraX, Phenix, and Rosetta separately for modeling. The first start unpacks the program (about 800 MB) into `~/.cache/cryopilot/`, which takes 10 to 30 seconds; later starts begin at once. Set `CRYOPILOT_CACHE` to unpack it elsewhere.
 
 ## Option 2: from source
 

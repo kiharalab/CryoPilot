@@ -71,6 +71,9 @@ class AgentProcess:
             encoding="utf-8",
             errors="replace",
             bufsize=1,
+            # Its own session, so a Ctrl-C or hangup in the server's terminal
+            # reaches only the server, which then stops the driver in order.
+            start_new_session=True,
         )
         threading.Thread(target=self._pump_stdout, name=f"stdout-{session_id}", daemon=True).start()
         threading.Thread(target=self._pump_stderr, name=f"stderr-{session_id}", daemon=True).start()
@@ -287,11 +290,20 @@ class ProcessManager:
         with self._lock:
             processes = list(self._processes.values())
             self._processes.clear()
-        for process in processes:
+
+        # In parallel, so stopping the server takes as long as the slowest
+        # driver, not the sum of them.
+        def stop(process: AgentProcess) -> None:
             try:
                 process.shutdown(timeout=5)
             except Exception:
                 pass
+
+        threads = [threading.Thread(target=stop, args=(process,), daemon=True) for process in processes]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
     def status(self, session_id: str) -> dict[str, Any]:
         process = self.get(session_id)

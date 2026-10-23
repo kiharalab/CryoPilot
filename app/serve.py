@@ -17,6 +17,7 @@ import argparse
 import os
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -62,7 +63,7 @@ def build_frontend(force: bool = False) -> None:
         return
     npm = shutil.which("npm")
     if npm is None:
-        print("npm was not found. Install Node.js 18+ and re-run, or build app/frontend manually.", file=sys.stderr)
+        print("npm was not found. Install Node.js 20.19+ and re-run, or build app/frontend manually.", file=sys.stderr)
         raise SystemExit(2)
     if not (FRONTEND_DIR / "node_modules").is_dir():
         print("Installing frontend dependencies (first run only)…", flush=True)
@@ -197,17 +198,37 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_open:
         launch = url if args.no_auth else f"{url}/?launch={os.environ['CRYOPILOT_LAUNCH_CODE']}"
         threading.Thread(target=open_browser_when_listening, args=(args.host, args.port, launch), daemon=True).start()
-    if PACKAGED:
-        from app.server.main import app as asgi_app
-    uvicorn.run(
-        asgi_app if PACKAGED else "app.server.main:app",
+    options = dict(
         host=args.host,
         port=args.port,
-        reload=args.dev and not PACKAGED,
-        reload_dirs=[str(APP_DIR / "server")] if args.dev else None,
         log_level="info",
         access_log=False,
+        # Open session pages keep event streams open. They end on their own
+        # when shutdown starts; anything still open after 5 s is closed, and
+        # the shutdown hook that stops the agent processes still runs.
+        timeout_graceful_shutdown=5,
     )
+    if args.dev and not PACKAGED:
+        uvicorn.run("app.server.main:app", reload=True, reload_dirs=[str(APP_DIR / "server")], **options)
+        return 0
+    class Server(uvicorn.Server):
+        def handle_exit(self, sig, frame):
+            # Event streams check this flag and end, so shutdown does not wait on them.
+            from app.server.state import shutting_down
+
+            shutting_down.set()
+            super().handle_exit(sig, frame)
+
+    if PACKAGED:
+        from app.server.main import app as asgi_app
+    server = Server(uvicorn.Config(asgi_app if PACKAGED else "app.server.main:app", **options))
+    # A closed terminal or a dropped SSH connection sends SIGHUP: stop the same way as on Ctrl-C.
+    signal.signal(signal.SIGHUP, server.handle_exit)
+    try:
+        server.run()
+    except KeyboardInterrupt:
+        # uvicorn raises Ctrl-C again after its clean shutdown; uvicorn.run() hides it the same way.
+        pass
     return 0
 
 

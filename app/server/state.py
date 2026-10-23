@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import platform
+import threading
 from typing import Any
 
 from fastapi import HTTPException
@@ -33,6 +34,9 @@ store = AppStore(APP_DB_PATH)
 bus = EventBus()
 trace_reader = HarnessTraceReader(HARNESS_SESSION_DB)
 credentials = Credentials()
+# Set by serve.py when the server starts to shut down, so long-lived streams
+# end on their own instead of holding the shutdown up.
+shutting_down = threading.Event()
 
 MODELING_EVENT_KINDS = {"reasoning", "tool_call", "tool_output", "answer", "error"}
 REASONING_EFFORTS = ("minimal", "low", "medium", "high", "xhigh")

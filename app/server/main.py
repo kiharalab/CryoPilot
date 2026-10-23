@@ -34,6 +34,7 @@ from .state import (
     require_project,
     require_session,
     session_runtime_view,
+    shutting_down,
     store,
     trace_reader,
 )
@@ -587,7 +588,7 @@ def session_events(session_id: str, request: Request, after: int = 0) -> Streami
         try:
             runtime = processes.status(session_id)
             yield encode({"type": "status", "state": runtime["state"], "detail": runtime["detail"], "running": runtime["running"]})
-            while True:
+            while not shutting_down.is_set():
                 now = time.time()
                 if session["kind"] == "reconstruction" and now - last_poll >= 1.0:
                     last_poll = now

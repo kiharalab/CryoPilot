@@ -25,8 +25,11 @@ from typing import Any
 DRIVER_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DRIVER_DIR.parent.parent.parent
 MODELING_ROOT = REPO_ROOT / "modeling_agent"
-sys.path.insert(0, str(DRIVER_DIR))
-sys.path.insert(0, str(MODELING_ROOT))
+# A compiled build has these modules built in, and the paths would point
+# outside it (to the home folder, where stray .py files could be imported).
+if "__compiled__" not in globals():
+    sys.path.insert(0, str(DRIVER_DIR))
+    sys.path.insert(0, str(MODELING_ROOT))
 
 from protocol import CommandReader, Emitter, redirect_stdout_to_stderr  # noqa: E402
 

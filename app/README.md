@@ -151,7 +151,7 @@ interruption. A stopped session resumes when you send it a message.
 
 A compiled Linux x86_64 executable of CryoPilot is available from <https://cryopilot.vercel.app>. It is
 one file that holds both agents, this web application, the DAQ model, VESPER, and ripgrep, and it needs
-no Python or Node.js. On first start it unpacks itself into `~/.cache/cryopilot/<version>/`. The code
+no Python or Node.js. On first start it unpacks itself into `~/.cache/cryopilot/`. The code
 here supports that build: when the server runs compiled (`config.PACKAGED`), it starts agent processes
 by running its own executable, and it moves the modeling sandbox from `modeling_agent/` to
 `~/.cryoagent/app/modeling/`, passing it to the agent as `MODELING_AGENT_SANDBOX`.
