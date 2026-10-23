@@ -107,12 +107,13 @@ Building the web frontend from source needs Node.js 20.19 or newer (tested 23.6.
 
 ## Option 1: compiled binary (Linux)
 
-Download the latest `cryopilot-<version>-linux-x86_64` from <https://cryopilot.vercel.app> to the CryoSPARC machine, then:
+On the CryoSPARC machine, run:
 
 ```bash
-chmod +x cryopilot-<version>-linux-x86_64
-./cryopilot-<version>-linux-x86_64
+curl -fsSL https://raw.githubusercontent.com/kiharalab/CryoPilot/main/install.sh | sh
 ```
+
+The installer downloads the newest release from GitHub, checks its SHA-256, keeps it in `~/.local/share/cryopilot/`, links it as `~/.local/bin/cryopilot`, and adds `~/.local/bin` to your PATH. Open a new terminal and start it with `cryopilot`. You can also download `cryopilot-<version>-linux-x86_64` from the [releases page](https://github.com/kiharalab/CryoPilot/releases) or <https://cryopilot.vercel.app>, then run `chmod +x` on it and start it directly.
 
 The binary is one file that contains both agents, the web application, the DAQ model, VESPER, and ripgrep. It does not need Python or Node.js. Install PyMOL, ChimeraX, Phenix, and Rosetta separately for modeling. The first start unpacks the program (about 800 MB) into `~/.cache/cryopilot/`, which takes 10 to 30 seconds; later starts begin at once. Set `CRYOPILOT_CACHE` to unpack it elsewhere.
 
@@ -216,7 +217,7 @@ source .venv/bin/activate
 
 ## Web application
 
-Start the server from the binary (`./cryopilot-<version>-linux-x86_64`) or from source (`python app/serve.py`). It listens on `127.0.0.1:8790`, prints an access link such as `http://127.0.0.1:8790/?token=...`, and opens it in your browser. The token keeps other users of a shared computer out of your sessions. A new token is made each time the server starts, so you open the new link after a restart. Set `CRYOPILOT_TOKEN` (at least 22 characters) to keep the same link.
+Start the server from the binary (`cryopilot`) or from source (`python app/serve.py`). It listens on `127.0.0.1:8790`, prints an access link such as `http://127.0.0.1:8790/?token=...`, and opens it in your browser. The token keeps other users of a shared computer out of your sessions. A new token is made each time the server starts, so you open the new link after a restart. Set `CRYOPILOT_TOKEN` (at least 22 characters) to keep the same link.
 
 The first time, CryoPilot asks for your OpenAI API key, your CryoSPARC URL, email, and password, and your CryoZeta account, and which processing guide the reconstruction agent follows. It also shows which modeling programs it found. Passwords stay in the server's memory unless you choose to remember them on this computer.
 
