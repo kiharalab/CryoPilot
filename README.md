@@ -110,10 +110,10 @@ Building the web frontend from source needs Node.js 20.19 or newer (tested 23.6.
 On the CryoSPARC machine, run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kiharalab/CryoPilot/main/install.sh | sh
+curl -fsSL https://cryopilot.vercel.app/install.sh | sh
 ```
 
-The installer downloads the newest release from GitHub, checks its SHA-256, keeps it in `~/.local/share/cryopilot/`, links it as `~/.local/bin/cryopilot`, and adds `~/.local/bin` to your PATH. Open a new terminal and start it with `cryopilot`. You can also download `cryopilot-<version>-linux-x86_64` from the [releases page](https://github.com/kiharalab/CryoPilot/releases) or <https://cryopilot.vercel.app>, then run `chmod +x` on it and start it directly.
+The installer downloads the binary from kiharalab.org, checks its SHA-256, keeps it in `~/.local/share/cryopilot/`, links it as `~/.local/bin/cryopilot`, and adds `~/.local/bin` to your PATH. Open a new terminal and start it with `cryopilot`. You can also download `cryopilot-<version>-linux-x86_64` from <https://cryopilot.vercel.app>, then run `chmod +x` on it and start it directly.
 
 The binary is one file that contains both agents, the web application, the DAQ model, VESPER, and ripgrep. It does not need Python or Node.js. Install PyMOL, ChimeraX, Phenix, and Rosetta separately for modeling. The first start unpacks the program (about 800 MB) into `~/.cache/cryopilot/`, which takes 10 to 30 seconds; later starts begin at once. Set `CRYOPILOT_CACHE` to unpack it elsewhere.
 
@@ -235,7 +235,29 @@ Because CryoPilot runs on the CryoSPARC machine, you will usually open it from y
 ssh -L 8790:127.0.0.1:8790 you@workstation
 ```
 
-Options: `--port N`, `--no-open`, and `--no-auth` (only on a computer that no one else can log in to). From source, `--rebuild` rebuilds the frontend and `--dev` reloads the server when its code changes. See [`app/README.md`](./app/README.md) for details.
+Options: `--port N`, `--no-open`, and `--no-auth` (only on a computer that no one else can log in to, and only with the default `--host`). From source, `--rebuild` rebuilds the frontend and `--dev` reloads the server when its code changes. See [`app/README.md`](./app/README.md) for details.
+
+### Run it for your lab
+
+CryoPilot can also run in the background like CryoSPARC, so people on your network open it by the computer's name and sign in with one shared password. Run these commands on the CryoSPARC computer, as the user who should own the projects:
+
+```bash
+cryopilot password        # choose the password everyone signs in with
+cryopilot start --lan     # start in the background on port 8790
+```
+
+`start` prints the links to share, for example `http://workstation:8790`. The server keeps running after you log out, until you stop it or the computer shuts down. Everyone who signs in shares the same projects, settings, and accounts (the OpenAI key and the CryoSPARC login), and can use the terminal, which runs as your user. So give the password only to people you trust with that account.
+
+| Command | Effect |
+| --- | --- |
+| `cryopilot start [--lan] [--port N]` | Start in the background. Without `--lan`, it answers only on this computer (use `ssh -L`). The address is saved for later starts. |
+| `cryopilot stop` | Stop it. Agent runs in progress stop too. |
+| `cryopilot restart` | Stop and start again with the same address. Run it after you change the password. |
+| `cryopilot status` | Show whether it runs and the links to open. |
+| `cryopilot log [-f]` | Show the server log (`~/.cryoagent/app/server.log`). |
+| `cryopilot password` | Set or change the password. A new password signs every browser out. |
+
+From source, use `python app/serve.py start --lan` and so on. The connection is plain HTTP, as in a default CryoSPARC installation, so use it only on a network you trust, or put an HTTPS proxy in front. To start CryoPilot when the computer boots, ask your administrator to run `cryopilot start --lan` from a systemd service or `@reboot` cron job for your user.
 
 ## Reconstruction agent from the terminal
 

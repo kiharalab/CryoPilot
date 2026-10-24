@@ -2,6 +2,7 @@
 """Start the CryoPilot web app with one command.
 
     python app/serve.py [--port 8790] [--no-open] [--dev] [--no-auth]
+    python app/serve.py start|stop|restart|status|log|password
 
 Builds the frontend on first run (or when sources changed), starts the API
 server on localhost, and opens the app in your browser. The app asks for an
@@ -9,6 +10,10 @@ access token, which is part of the link printed at startup; set
 CRYOPILOT_TOKEN (at least 22 characters) to keep the same token across
 restarts. The browser opened here gets a one-time launch code instead of the
 token, so the token never appears on a command line other users can read.
+Once a shared password is set (``password``), the app asks for it instead.
+
+The other commands run the server in the background, like CryoSPARC; see
+service.py.
 """
 
 from __future__ import annotations
@@ -36,6 +41,9 @@ DIST_DIR = FRONTEND_DIR / "dist"
 REPO_ROOT = APP_DIR.parent
 # A chosen CRYOPILOT_TOKEN must be about as hard to guess as a generated one.
 MIN_TOKEN_LENGTH = 22
+# The background-server commands (service.py); anything else runs the server here.
+SERVICE_COMMANDS = {"start", "stop", "restart", "status", "log", "password"}
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
 def newest_mtime(paths: list[Path]) -> float:
@@ -128,7 +136,18 @@ def open_browser_when_listening(host: str, port: int, url: str, timeout: float =
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the CryoPilot web app.")
+    argv = sys.argv[1:] if argv is None else argv
+    if str(APP_DIR.parent) not in sys.path:
+        sys.path.insert(0, str(APP_DIR.parent))
+    if argv and argv[0] in SERVICE_COMMANDS:
+        from app import service
+
+        return service.main(argv)
+
+    parser = argparse.ArgumentParser(
+        description="Run the CryoPilot web app.",
+        epilog="To run it in the background instead: cryopilot start|stop|restart|status|log|password (add -h to each).",
+    )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: localhost only).")
     parser.add_argument("--port", type=int, default=int(os.environ.get("CRYOAGENT_APP_PORT", "8790")))
     parser.add_argument("--no-open", action="store_true", help="Do not open a browser window.")
@@ -153,19 +172,32 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_build:
             build_frontend(force=args.rebuild)
 
-    if str(APP_DIR.parent) not in sys.path:
-        sys.path.insert(0, str(APP_DIR.parent))
     os.chdir(APP_DIR.parent)
 
     import uvicorn
+
+    from app.server import password as lab_password
 
     # The server process (and its reloader child) reads these from the
     # environment: the token, a one-time code for the browser opened below,
     # the secret that signs the session cookie, and the host it answers to.
     os.environ["CRYOPILOT_BIND_HOST"] = args.host
+    use_password = not args.no_auth and lab_password.is_set()
+    if args.no_auth and args.host not in LOCAL_HOSTS:
+        print(
+            "--no-auth works only when CryoPilot answers on this computer alone (the default --host).\n"
+            "For other computers, set a password with:  cryopilot password",
+            file=sys.stderr,
+        )
+        return 2
     if args.no_auth:
         os.environ["CRYOPILOT_AUTH"] = "0"
         os.environ.pop("CRYOPILOT_TOKEN", None)
+    elif use_password:
+        # The server reads the password file itself; no token is made or printed.
+        os.environ["CRYOPILOT_AUTH"] = "1"
+        os.environ.pop("CRYOPILOT_TOKEN", None)
+        os.environ["CRYOPILOT_LAUNCH_CODE"] = secrets.token_urlsafe(24)
     else:
         token = os.environ.get("CRYOPILOT_TOKEN", "").strip()
         if token and len(token) < MIN_TOKEN_LENGTH:
@@ -187,9 +219,20 @@ def main(argv: list[str] | None = None) -> int:
 
     url_host = f"[{args.host}]" if ":" in args.host else args.host
     url = f"http://{url_host}:{args.port}"
-    link = url if args.no_auth else f"{url}/?token={os.environ['CRYOPILOT_TOKEN']}"
-    print(f"\nCryoPilot is running. Open this link in your browser:\n\n    {link}\n", flush=True)
-    if args.host in {"127.0.0.1", "localhost"}:
+    if args.host in {"0.0.0.0", "::"}:
+        from app.service import addresses
+
+        public_url = addresses(args.host, args.port)[0]
+    else:
+        public_url = url
+    if args.no_auth or use_password:
+        print(f"\nCryoPilot is running. Open this link in your browser:\n\n    {public_url}\n", flush=True)
+        if use_password:
+            print("Sign in with the CryoPilot password.\n", flush=True)
+    else:
+        link = f"{public_url}/?token={os.environ['CRYOPILOT_TOKEN']}"
+        print(f"\nCryoPilot is running. Open this link in your browser:\n\n    {link}\n", flush=True)
+    if args.host in LOCAL_HOSTS:
         print(
             "From another computer, forward the port first, for example:\n"
             f"    ssh -L {args.port}:localhost:{args.port} <user>@<this-computer>\n",

@@ -25,6 +25,7 @@ The first run builds the frontend if `app/frontend/dist` is missing or older tha
 link (`http://127.0.0.1:8790/?token=...`), and opens it in a browser tab.
 
 Options: `--port`, `--host`, `--no-open`, `--no-auth`, `--rebuild`, `--dev` (auto-reload the API).
+Commands: `start`, `stop`, `restart`, `status`, `log`, `password` (see below).
 
 ### Access token
 
@@ -35,8 +36,23 @@ printed link (`CRYOPILOT_TOKEN` must be at least 22 characters). Opening the lin
 an HttpOnly, SameSite=Strict cookie that is valid until the server restarts; the browser that
 `serve.py` opens gets a one-time code instead, so the token never appears on a command line. You can
 also paste the link into the sign-in screen. `--no-auth` turns the token check off; use it only on a
-computer that no one else can log in to. The token is removed from the environment of agent processes
-and terminals.
+computer that no one else can log in to, and only with the default `--host`. The token is removed
+from the environment of agent processes and terminals.
+
+### Shared password and background server
+
+For a server that others reach over the network, `app/serve.py password` (`cryopilot password` in the
+binary) stores a salted scrypt hash in `APP_HOME/password.json` (mode 0600). Once it exists, the server
+asks for that password instead of a token, and no token is made or printed. The cookie is an HMAC of
+the hash under a secret kept in `APP_HOME/cookie_secret`, so sign-ins survive a restart and a new
+password signs every browser out. The password works only on the sign-in screen, not in an
+`Authorization` header.
+
+`start`, `stop`, `restart`, `status`, and `log` (in `service.py`) run the server in its own session,
+detached from the terminal, like `cryosparcm`. `start --lan` binds to `0.0.0.0`. The address is saved
+in `APP_HOME/server.json`, the process ID and computer name in `APP_HOME/server.pid`, and the output in
+`APP_HOME/server.log`. A background server always needs the password. Because the home folder can be
+shared between computers, the commands act only on the computer that started the server.
 
 In both modes the server answers only requests addressed to `localhost`, `127.0.0.1`, `::1`, or the
 `--host` it was started with, and refuses changes and WebSocket connections that come from another
@@ -104,7 +120,7 @@ Server (`app/server/`):
 | --- | --- |
 | `main.py` | App setup, projects, sessions, transcripts, the event stream, and the built frontend |
 | `state.py` | Shared objects: database, event bus, agent processes, credentials, settings helpers |
-| `auth.py` | Access-token middleware and the sign-in routes |
+| `auth.py`, `password.py` | Access-token and password middleware, the sign-in routes, and the stored password hash |
 | `credentials.py` | API key and passwords, in memory or remembered |
 | `routes_setup.py`, `guides.py` | First-run setup, settings, connection tests, processing guides |
 | `routes_cryosparc.py`, `cryosparc_jobs.py`, `cryosparc_bridge.py`, `volumes.py` | CryoSPARC jobs, maps, previews, and job images |

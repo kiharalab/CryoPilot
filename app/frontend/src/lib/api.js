@@ -61,8 +61,8 @@ const qs = (params) => {
 
 export const api = {
   // ---------------------------------------------------------------- auth
-  authStatus: () => request('/api/auth/status'), // {enabled, authenticated}
-  login: (token) => request('/api/auth/login', { method: 'POST', body: { token } }),
+  authStatus: () => request('/api/auth/status'), // {enabled, method: 'token'|'password', authenticated}
+  login: (secret) => request('/api/auth/login', { method: 'POST', body: secret }), // {token} or {password}
   logout: () => request('/api/auth/logout', { method: 'POST' }),
 
   // ------------------------------------------------------- setup/settings

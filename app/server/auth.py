@@ -10,6 +10,12 @@ either one for an HttpOnly cookie that holds an HMAC of the token, not the
 token itself. ``CRYOPILOT_AUTH=0`` turns the token check off on a
 single-user computer.
 
+A server that others reach over the network (``cryopilot start --lan``)
+uses a shared password instead, set with ``cryopilot password`` (see
+password.py). Then the sign-in page asks for the password, no token is made,
+and the cookie is an HMAC of the password hash under a secret kept on disk,
+so sign-ins survive a restart and a new password signs every browser out.
+
 In both modes the server answers only requests addressed to this computer
 (the Host header, against DNS rebinding), and it refuses state-changing
 requests and WebSockets that another site's page sent, including pages on
@@ -31,6 +37,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from . import password as lab_password
+
 COOKIE_PREFIX = "cryopilot_session"
 COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 LAUNCH_CODE_LIFETIME = 10 * 60
@@ -42,11 +50,15 @@ CLOSE_FORBIDDEN = 4403
 
 AUTH_ENABLED = os.environ.get("CRYOPILOT_AUTH", "1").strip().lower() not in {"0", "false", "no", "off"}
 TOKEN = os.environ.get("CRYOPILOT_TOKEN", "").strip() or secrets.token_urlsafe(24)
+# The shared password's hash when one is set; it then replaces the token.
+PASSWORD = lab_password.load() if AUTH_ENABLED else None
 # serve.py hands these to the server process. They leave the environment
 # here, so agents and terminal shells do not inherit them.
 LAUNCH_CODE = os.environ.pop("CRYOPILOT_LAUNCH_CODE", "").strip()
 LAUNCH_DEADLINE = time.monotonic() + LAUNCH_CODE_LIFETIME
 COOKIE_SECRET = os.environ.pop("CRYOPILOT_COOKIE_SECRET", "").strip() or secrets.token_urlsafe(32)
+if PASSWORD is not None:
+    COOKIE_SECRET = lab_password.cookie_secret()
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 ALL_INTERFACES = {"0.0.0.0", "::"}
@@ -66,14 +78,22 @@ _paused_until = 0.0
 
 
 # ---------------------------------------------------------------- tokens
+def method() -> str:
+    """How browsers sign in: "password" when one is set, else "token"."""
+
+    return "password" if PASSWORD is not None else "token"
+
+
 def token_matches(candidate: str | None) -> bool:
     if not candidate:
         return False
+    if PASSWORD is not None:
+        return lab_password.verify(PASSWORD, candidate)
     return hmac.compare_digest(candidate.encode("utf-8"), TOKEN.encode("utf-8"))
 
 
 def check_token(candidate: str | None) -> str:
-    """"ok", "wrong", or "paused" when a wrong token arrived less than FAILURE_PAUSE ago."""
+    """"ok", "wrong", or "paused" when a wrong token or password arrived less than FAILURE_PAUSE ago."""
 
     global _paused_until
     now = time.monotonic()
@@ -96,9 +116,20 @@ def use_launch_code(candidate: str | None) -> bool:
 
 
 def session_value() -> str:
-    """The cookie value: an HMAC of the token under this run's secret."""
+    """The cookie value: an HMAC of the token under this run's secret, or of the password hash."""
 
-    return hmac.new(COOKIE_SECRET.encode("utf-8"), TOKEN.encode("utf-8"), hashlib.sha256).hexdigest()
+    signed = f"password:{PASSWORD['hash']}" if PASSWORD is not None else TOKEN
+    return hmac.new(COOKIE_SECRET.encode("utf-8"), signed.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def wrong_message() -> str:
+    if PASSWORD is not None:
+        return "That password is not right."
+    return "That access token is not valid for this server."
+
+
+def paused_message() -> str:
+    return f"Too many wrong {'passwords' if PASSWORD is not None else 'access tokens'}. Wait a moment and try again."
 
 
 def cookie_name(scope: dict[str, Any]) -> str:
@@ -145,7 +176,8 @@ def _authenticate(scope: dict[str, Any], headers: dict[str, str]) -> str:
     cookie = _session_cookie(headers, cookie_name(scope))
     if cookie and hmac.compare_digest(cookie.encode("utf-8"), session_value().encode("utf-8")):
         return "ok"
-    token = _header_token(headers)
+    # Scripts may send the token in a header; the password works only on the sign-in page.
+    token = _header_token(headers) if PASSWORD is None else None
     if token is None:
         return "missing"
     return check_token(token)
@@ -241,7 +273,8 @@ class AccessTokenMiddleware:
         # token or the one-time code for the cookie and drop it from the URL.
         query = dict(parse_qsl((scope.get("query_string") or b"").decode("latin-1"), keep_blank_values=True))
         if kind == "http" and not path.startswith("/api/") and ("token" in query or "launch" in query):
-            if ("launch" in query and use_launch_code(query["launch"])) or ("token" in query and check_token(query["token"]) == "ok"):
+            by_token = "token" in query and PASSWORD is None and check_token(query["token"]) == "ok"
+            if ("launch" in query and use_launch_code(query["launch"])) or by_token:
                 remaining = {key: value for key, value in query.items() if key not in {"token", "launch"}}
                 location = path + (f"?{urlencode(remaining)}" if remaining else "")
                 await send(
@@ -268,15 +301,16 @@ class AccessTokenMiddleware:
         elif kind == "websocket":
             await _close_websocket(receive, send, CLOSE_UNAUTHORIZED)
         elif result == "paused":
-            await _send_json(send, 429, {"error": "Too many wrong access tokens. Wait a moment and try again."}, [(b"retry-after", b"1")])
+            await _send_json(send, 429, {"error": paused_message()}, [(b"retry-after", b"1")])
         else:
-            await _send_json(send, 401, {"error": "Sign in with the access link printed when CryoPilot started.", "auth_required": True})
+            hint = "Sign in with the CryoPilot password." if PASSWORD is not None else "Sign in with the access link printed when CryoPilot started."
+            await _send_json(send, 401, {"error": hint, "auth_required": True})
 
 
 # ------------------------------------------------------------------ routes
 @router.get("/api/auth/status")
 async def auth_status(request: Request) -> dict[str, Any]:
-    return {"enabled": AUTH_ENABLED, "authenticated": request_is_authenticated(request)}
+    return {"enabled": AUTH_ENABLED, "method": method(), "authenticated": request_is_authenticated(request)}
 
 
 @router.post("/api/auth/login")
@@ -285,16 +319,21 @@ async def auth_login(request: Request) -> JSONResponse:
         body = await request.json()
     except Exception:
         body = {}
-    candidate = str((body or {}).get("token") or "").strip()
-    # Accept the whole printed link as well as the bare token.
-    if "token=" in candidate:
-        candidate = dict(parse_qsl(candidate.split("?", 1)[-1])).get("token", "")
+    body = body if isinstance(body, dict) else {}
+    if PASSWORD is not None:
+        # Spaces count in a password, so it is not trimmed.
+        candidate = str(body.get("password") or "")
+    else:
+        candidate = str(body.get("token") or "").strip()
+        # Accept the whole printed link as well as the bare token.
+        if "token=" in candidate:
+            candidate = dict(parse_qsl(candidate.split("?", 1)[-1])).get("token", "")
     if AUTH_ENABLED:
         result = check_token(candidate)
         if result == "paused":
-            return JSONResponse({"error": "Too many wrong access tokens. Wait a moment and try again."}, status_code=429)
+            return JSONResponse({"error": paused_message()}, status_code=429)
         if result != "ok":
-            return JSONResponse({"error": "That access token is not valid for this server."}, status_code=401)
+            return JSONResponse({"error": wrong_message()}, status_code=401)
     response = JSONResponse({"ok": True})
     if AUTH_ENABLED:
         response.headers["set-cookie"] = cookie_header(request.scope, session_value())

@@ -161,7 +161,7 @@ def test_login_cookie_is_an_hmac_named_for_the_port():
     assert TestClient(app, headers={"Cookie": f"{name}={auth.TOKEN}"}).get("/api/setup").status_code == 401
     assert TestClient(app, headers={"Cookie": f"cryopilot_session_8791={value}"}).get("/api/setup").status_code == 401
     status = TestClient(app, headers={"Cookie": f"{name}={value}"}).get("/api/auth/status").json()
-    assert status == {"enabled": True, "authenticated": True}
+    assert status == {"enabled": True, "method": "token", "authenticated": True}
 
 
 def test_launch_code_signs_in_once(monkeypatch):
@@ -206,7 +206,7 @@ def test_wrong_tokens_pause_token_checks_but_not_signed_in_browsers(monkeypatch)
 def test_no_auth_mode_skips_only_the_token(monkeypatch):
     monkeypatch.setattr(auth, "AUTH_ENABLED", False)
     assert TestClient(app).get("/api/setup").status_code == 200
-    assert TestClient(app).get("/api/auth/status").json() == {"enabled": False, "authenticated": True}
+    assert TestClient(app).get("/api/auth/status").json() == {"enabled": False, "method": "token", "authenticated": True}
 
 
 # ------------------------------------------------------------------ server

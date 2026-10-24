@@ -1,7 +1,7 @@
 {
   "name": "cryoagent-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "prebuild": "node scripts/copy-molstar.mjs",

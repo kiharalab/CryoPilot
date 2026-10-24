@@ -27,7 +27,7 @@ function signInSkipped() {
 }
 
 export function App() {
-  const [auth, setAuth] = useState(null) // null while checking, then {enabled, authenticated}
+  const [auth, setAuth] = useState(null) // null while checking, then {enabled, method, authenticated}
   const [error, setError] = useState(null) // null, or the failed request's error
   // Whether to ask for passwords again. Decided when the settings load after
   // signing in to CryoPilot or after first-run setup, not on every change:
@@ -72,7 +72,7 @@ export function App() {
       <Centered>
         <p className="text-base font-medium">Cannot reach the CryoPilot server</p>
         {detail ? <p className="max-w-sm text-center text-sm text-muted">{detail}</p> : null}
-        <p className="max-w-sm text-center text-sm text-muted">Check that it is still running in your terminal, then try again.</p>
+        <p className="max-w-sm text-center text-sm text-muted">Check that CryoPilot is still running, then try again.</p>
         <Button onClick={check}>Try again</Button>
       </Centered>
     )
@@ -84,7 +84,7 @@ export function App() {
       </Centered>
     )
   }
-  if (!auth.authenticated) return <AccessGate onDone={check} />
+  if (!auth.authenticated) return <AccessGate method={auth.method} onDone={check} />
   if (!setup.onboarded) return <Onboarding onDone={refreshSetup} />
   if (signInOpen) {
     return (
