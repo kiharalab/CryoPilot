@@ -96,7 +96,7 @@ class VesperTests(unittest.TestCase):
                 self.fit()
         self.assertEqual(self.model.read_bytes(), before)
 
-    @unittest.skipUnless(os.environ.get("CRYOAGENT_TEST_VESPER") == "1", "optional installed VESPER/ChimeraX smoke test")
+    @unittest.skipUnless(os.environ.get("CRYOPILOT_TEST_VESPER") == "1", "optional installed VESPER/ChimeraX smoke test")
     def test_installed_vesper_recovers_rotated_translated_model(self):
         structure = gemmi.Structure()
         model, chain = gemmi.Model(1), gemmi.Chain("A")
@@ -127,7 +127,7 @@ class VesperTests(unittest.TestCase):
         actual = np.array([[a.pos.x, a.pos.y, a.pos.z] for c in fitted[0] for r in c for a in r])
         target_xyz = np.array([[a.pos.x, a.pos.y, a.pos.z] for c in target[0] for r in c for a in r])
         self.assertLess(np.sqrt(np.mean(np.sum((actual - target_xyz) ** 2, axis=1))), 1.5)
-        if os.environ.get("CRYOAGENT_TEST_QSCORE") == "1":
+        if os.environ.get("CRYOPILOT_TEST_QSCORE") == "1":
             flip_map_copy(self.root / "map.mrc", self.root / "flipped.mrc")
             other = vesper_align.align(self.model, self.root / "flipped.mrc", self.root / "fit_flipped",
                                       resolution=3, contour=.01, candidate_index=1, grid_spacing=1,

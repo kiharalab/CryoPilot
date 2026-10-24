@@ -21,8 +21,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from app.server import config  # noqa: E402
 
-if config.APP_HOME == Path("~/.cryoagent/app").expanduser():
-    pytest.skip("the app home is the user's real one; run with CRYOAGENT_APP_HOME set", allow_module_level=True)
+if config.APP_HOME == Path("~/.cryopilot/app").expanduser():
+    pytest.skip("the app home is the user's real one; run with CRYOPILOT_APP_HOME set", allow_module_level=True)
 
 from fastapi.testclient import TestClient  # noqa: E402
 from starlette.websockets import WebSocketDisconnect  # noqa: E402

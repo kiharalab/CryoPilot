@@ -81,7 +81,7 @@ class BashToolTests(unittest.TestCase):
         binary = self.launchers / "real pymol"
         binary.write_text('#!/bin/sh\necho "real:$*"\n')
         binary.chmod(0o755)
-        with patch.dict(os.environ, {"CRYOAGENT_PYMOL_THREADS": "4"}), \
+        with patch.dict(os.environ, {"CRYOPILOT_PYMOL_THREADS": "4"}), \
              patch.object(tools, "_LAUNCHER_DIRECTORY", None), \
              patch.object(tools, "_pymol_executable", return_value=str(binary)), \
              patch.object(tools, "_chimerax_executable", side_effect=RuntimeError("absent")):
@@ -91,6 +91,7 @@ class BashToolTests(unittest.TestCase):
 
         self.assertEqual(result["stdout"], "real:-d set max_threads, 4 -cq a b\n")
         self.assertEqual(sorted(path.name for path in launchers.iterdir()), ["pymol"])
+
 
 
 if __name__ == "__main__":

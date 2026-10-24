@@ -1,8 +1,8 @@
-"""Paths and environment for the CryoAgent web application.
+"""Paths and environment for the CryoPilot web application.
 
-Everything the app persists lives under ``APP_HOME`` (``~/.cryoagent/app`` by
+Everything the app persists lives under ``APP_HOME`` (``~/.cryopilot/app`` by
 default). The reconstruction agent keeps using the harness session database
-(``~/.cryoagent/sessions.sqlite3`` by default) so sessions started from the
+(``~/.cryopilot/sessions.sqlite3`` by default) so sessions started from the
 terminal and from the web app are interchangeable.
 """
 
@@ -24,12 +24,12 @@ FRONTEND_DIR = APP_DIR / "frontend"
 FRONTEND_DIST = FRONTEND_DIR / "dist"
 DRIVERS_DIR = APP_DIR / "server" / "drivers"
 
-APP_HOME = Path(os.environ.get("CRYOAGENT_APP_HOME", "~/.cryoagent/app")).expanduser()
+APP_HOME = Path(os.environ.get("CRYOPILOT_APP_HOME", "~/.cryopilot/app")).expanduser()
 PROJECTS_DIR = APP_HOME / "projects"
 APP_DB_PATH = APP_HOME / "app.sqlite3"
 MODELING_MEMORY_DB = APP_HOME / "modeling_sessions.sqlite3"
 HARNESS_SESSION_DB = Path(
-    os.environ.get("CRYOAGENT_SESSION_DB", "~/.cryoagent/sessions.sqlite3")
+    os.environ.get("CRYOPILOT_SESSION_DB", "~/.cryopilot/sessions.sqlite3")
 ).expanduser()
 
 # Modeling tools refuse any path outside their sandbox root, so each project

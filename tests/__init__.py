@@ -1,1 +1,1 @@
-"""Automated tests for cryoagent."""
+"""Automated tests for CryoPilot."""

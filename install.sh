@@ -17,7 +17,7 @@
 
 set -eu
 
-LATEST=0.1.2
+LATEST=0.1.3
 DOWNLOADS=https://kiharalab.org/CryoPilot/app
 
 say() { printf '%s\n' "$*"; }

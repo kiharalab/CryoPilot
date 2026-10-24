@@ -254,7 +254,7 @@ cryopilot start --lan     # start in the background on port 8790
 | `cryopilot stop` | Stop it. Agent runs in progress stop too. |
 | `cryopilot restart` | Stop and start again with the same address. Run it after you change the password. |
 | `cryopilot status` | Show whether it runs and the links to open. |
-| `cryopilot log [-f]` | Show the server log (`~/.cryoagent/app/server.log`). |
+| `cryopilot log [-f]` | Show the server log (`~/.cryopilot/app/server.log`). |
 | `cryopilot password` | Set or change the password. A new password signs every browser out. |
 
 From source, use `python app/serve.py start --lan` and so on. The connection is plain HTTP, as in a default CryoSPARC installation, so use it only on a network you trust, or put an HTTPS proxy in front. To start CryoPilot when the computer boots, ask your administrator to run `cryopilot start --lan` from a systemd service or `@reboot` cron job for your user.
@@ -274,7 +274,7 @@ The prompts ask for your CryoSPARC login, a project title and parent directory, 
 | `--model` | `gpt-5.5` | OpenAI model for a new session (also `OPENAI_MODEL`). |
 | `--reasoning-effort` | `xhigh` | Reasoning setting for a new session (also `REASONING_EFFORT`). |
 | `--cryosparc-url`, `--cryosparc-email` | prompted | CryoSPARC login. The password is prompted or read from `CRYOSPARC_PASSWORD`. |
-| `--session-db` | `~/.cryoagent/sessions.sqlite3` | Session database (also `CRYOAGENT_SESSION_DB`). |
+| `--session-db` | `~/.cryopilot/sessions.sqlite3` | Session database (also `CRYOPILOT_SESSION_DB`). |
 
 Press Ctrl-C to stop a turn. The session is saved at a checkpoint and can be resumed with `--resume`.
 
@@ -293,12 +293,12 @@ Place input files under `modeling_agent/` (for example in `data/`), because the 
 
 | What | Location |
 | --- | --- |
-| Reconstruction sessions | `~/.cryoagent/sessions.sqlite3` |
-| Web application projects, sessions, uploads, and map previews | `~/.cryoagent/app/` (`CRYOAGENT_APP_HOME`) |
-| Modeling workspaces | `modeling_agent/workspaces/` from source, `~/.cryoagent/app/modeling/` in the binary |
+| Reconstruction sessions | `~/.cryopilot/sessions.sqlite3` |
+| Web application projects, sessions, uploads, and map previews | `~/.cryopilot/app/` (`CRYOPILOT_APP_HOME`) |
+| Modeling workspaces | `modeling_agent/workspaces/` from source, `~/.cryopilot/app/modeling/` in the binary |
 | CryoSPARC jobs | The CryoSPARC project you named at startup |
 
-Credentials come from the environment or from the web application. The web application keeps passwords in memory, unless you turn on "Remember passwords on this computer". It then stores them in `~/.cryoagent/app/credentials.json`, which only your user account can read.
+Credentials come from the environment or from the web application. The web application keeps passwords in memory, unless you turn on "Remember passwords on this computer". It then stores them in `~/.cryopilot/app/credentials.json`, which only your user account can read.
 
 # Reproducing the paper
 

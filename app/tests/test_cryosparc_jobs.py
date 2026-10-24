@@ -32,12 +32,12 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "cryosparc"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-# Keep the user's ~/.cryoagent untouched: point the app at a scratch home
+# Keep the user's ~/.cryopilot untouched: point the app at a scratch home
 # before the server modules create their database.
 _SCRATCH = Path(tempfile.mkdtemp(prefix="cryopilot-tests-"))
 atexit.register(shutil.rmtree, _SCRATCH, ignore_errors=True)
-os.environ.setdefault("CRYOAGENT_APP_HOME", str(_SCRATCH / "app"))
-os.environ.setdefault("CRYOAGENT_SESSION_DB", str(_SCRATCH / "sessions.sqlite3"))
+os.environ.setdefault("CRYOPILOT_APP_HOME", str(_SCRATCH / "app"))
+os.environ.setdefault("CRYOPILOT_SESSION_DB", str(_SCRATCH / "sessions.sqlite3"))
 if "app.server.config" in sys.modules and "app.server.state" not in sys.modules:
     importlib.reload(sys.modules["app.server.config"])
 
@@ -45,8 +45,8 @@ import mrcfile  # noqa: E402
 
 from app.server import config  # noqa: E402
 
-if config.APP_HOME == Path("~/.cryoagent/app").expanduser():
-    pytest.skip("the app home is the user's real one; run with CRYOAGENT_APP_HOME set", allow_module_level=True)
+if config.APP_HOME == Path("~/.cryopilot/app").expanduser():
+    pytest.skip("the app home is the user's real one; run with CRYOPILOT_APP_HOME set", allow_module_level=True)
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -125,11 +125,11 @@ def build_project(root: Path, harness_id: str) -> Path:
         job_dir.mkdir(parents=True)
         (job_dir / "job.json").write_text(fixture.read_text())
     info = json.loads((FIXTURES / "project.json").read_text())
-    info.update({"project_dir": str(project_dir), "description": f"cryoagent-session:{harness_id}"})
+    info.update({"project_dir": str(project_dir), "description": f"cryopilot-session:{harness_id}"})
     (project_dir / "project.json").write_text(json.dumps(info))
     decoy = parent / "CS-older-copy"
     decoy.mkdir(parents=True)
-    (decoy / "project.json").write_text(json.dumps({**info, "project_dir": str(decoy), "description": "cryoagent-session:other"}))
+    (decoy / "project.json").write_text(json.dumps({**info, "project_dir": str(decoy), "description": "cryopilot-session:other"}))
     for metafile, result, mrc_path in PROJECT_MAPS:
         write_cs(project_dir / metafile, result, mrc_path)
         write_map(project_dir / mrc_path)

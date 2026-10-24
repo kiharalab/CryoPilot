@@ -2128,7 +2128,7 @@ class CryoSPARCWorkflow:
             )
         )
         plan_description = (
-            "cryoagent_extraction_plan_v1: "
+            "cryopilot_extraction_plan_v1: "
             + json.dumps(extraction_plan, sort_keys=True, separators=(",", ":"))
             + "\nPost-extraction review required: inspect representative particles and "
             "all 2D classes for density near the image boundary. Re-extract before "

@@ -92,7 +92,7 @@ class PdbHomologTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             download_homolog("AF-FAKE-F1", self.root / "reference", session=Session([]))
 
-    @unittest.skipUnless(os.environ.get("CRYOAGENT_TEST_PDB") == "1", "optional public PDB API smoke test")
+    @unittest.skipUnless(os.environ.get("CRYOPILOT_TEST_PDB") == "1", "optional public PDB API smoke test")
     def test_live_crambin_search_and_download(self):
         self.fasta.write_text(">crambin\nTTCCPSIVARSNFNVCRLPGTPEAICATYTGCIIIPGATCPGDYAN\n")
         result = search_homologs(self.fasta, self.root / "search", max_hits=2)

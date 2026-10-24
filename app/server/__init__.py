@@ -1,1 +1,1 @@
-"""CryoAgent web application server package."""
+"""CryoPilot web application server package."""

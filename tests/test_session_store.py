@@ -172,7 +172,7 @@ class SessionStoreTests(unittest.TestCase):
                 {
                     "role": "developer",
                     "content": {
-                        "schema": "cryoagent_compaction_v1",
+                        "schema": "cryopilot_compaction_v1",
                         "current_stage": "motion correction",
                     },
                 },

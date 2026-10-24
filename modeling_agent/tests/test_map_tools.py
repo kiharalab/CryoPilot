@@ -79,7 +79,7 @@ class RegisteredMapToolTests(unittest.TestCase):
         self.assertTrue({"flip_map", "align_model_to_map", "render_map_model", "render_map_views", "search_pdb_homologs",
                          "download_pdb_homolog", "run_qscore", "compare_map_hands"} <= names)
 
-    @unittest.skipUnless(os.environ.get("CRYOAGENT_TEST_QSCORE") == "1", "optional installed QScore smoke test")
+    @unittest.skipUnless(os.environ.get("CRYOPILOT_TEST_QSCORE") == "1", "optional installed QScore smoke test")
     def test_installed_qscore_scores_aligned_density_and_marks_missing_atoms(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

@@ -499,11 +499,11 @@ def _pymol_thread_arguments() -> list[str]:
     """Cap PyMOL ray-tracing threads; by default it starts one per CPU core.
 
     Several concurrent agents each rendering with every core oversubscribe the
-    node. CRYOAGENT_PYMOL_THREADS overrides the default of 4.
+    node. CRYOPILOT_PYMOL_THREADS overrides the default of 4.
     """
 
     try:
-        threads = int(os.environ.get("CRYOAGENT_PYMOL_THREADS", "4"))
+        threads = int(os.environ.get("CRYOPILOT_PYMOL_THREADS", "4"))
     except ValueError:
         threads = 4
     return ["-d", f"set max_threads, {max(1, threads)}"]
@@ -578,7 +578,7 @@ def _noninteractive_launcher_directory() -> Path:
 
 
 def _write_launchers() -> Path:
-    directory = Path(tempfile.mkdtemp(prefix="cryoagent_launchers_"))
+    directory = Path(tempfile.mkdtemp(prefix="cryopilot_launchers_"))
     atexit.register(shutil.rmtree, directory, True)
     for names, resolve, arguments in ((("pymol",), _pymol_executable, _pymol_thread_arguments()),
                                       (("chimerax", "ChimeraX"), _chimerax_executable, [])):

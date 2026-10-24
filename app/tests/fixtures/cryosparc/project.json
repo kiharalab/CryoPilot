@@ -2,7 +2,7 @@
  "uid": "P61",
  "project_dir": "/net/kihara/scratch/ppunuru/CS-revitrified-hiv-1-env-generic-goal-rerun-from-corrected-exposures-2026-10-13",
  "title": "Revitrified HIV-1 Env Generic-Goal Rerun from Corrected Exposures 2026-10-13",
- "description": "cryoagent-session:1c64c5a7bda84d4cafd5070158705bd3",
+ "description": "cryopilot-session:1c64c5a7bda84d4cafd5070158705bd3",
  "created_at": {
   "$date": "2026-10-13T15:28:14.675Z"
  }

@@ -494,7 +494,7 @@ class ParticleExtractionSafetyTests(unittest.TestCase):
         )
         self.assertFalse(job.queue_calls)
         description = workflow.workspace.created[0][1]["desc"]
-        self.assertIn("cryoagent_extraction_plan_v1", description)
+        self.assertIn("cryopilot_extraction_plan_v1", description)
         self.assertIn('"physical_box_A":302.4', description)
         self.assertIn("Post-extraction review required", description)
 

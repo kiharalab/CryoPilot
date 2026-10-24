@@ -1,4 +1,4 @@
-name: cryoagent
+name: cryopilot
 channels:
   - conda-forge
 dependencies:

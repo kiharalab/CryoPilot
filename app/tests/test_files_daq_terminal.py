@@ -1,7 +1,7 @@
 """Tests for project files, server path completion, DAQ results, and the terminal.
 
 Run from the repository root with a throwaway app home:
-    CRYOAGENT_APP_HOME=$(mktemp -d) .venv/bin/python -m pytest app/tests -q
+    CRYOPILOT_APP_HOME=$(mktemp -d) .venv/bin/python -m pytest app/tests -q
 """
 
 from __future__ import annotations
@@ -23,19 +23,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-os.environ.setdefault("CRYOAGENT_APP_HOME", tempfile.mkdtemp(prefix="cryopilot-tests-"))
+os.environ.setdefault("CRYOPILOT_APP_HOME", tempfile.mkdtemp(prefix="cryopilot-tests-"))
 
 
 def _isolate_app_home() -> None:
-    """Make sure the app database and projects live in the test home, never in ~/.cryoagent."""
+    """Make sure the app database and projects live in the test home, never in ~/.cryopilot."""
 
     from app.server import config
 
-    wanted = Path(os.environ["CRYOAGENT_APP_HOME"]).expanduser()
+    wanted = Path(os.environ["CRYOPILOT_APP_HOME"]).expanduser()
     if config.APP_HOME == wanted:
         return
     if "app.server.state" in sys.modules:
-        pytest.skip("The app state was loaded with another CRYOAGENT_APP_HOME; run with it set.", allow_module_level=True)
+        pytest.skip("The app state was loaded with another CRYOPILOT_APP_HOME; run with it set.", allow_module_level=True)
     # Another test module imported the config first; nothing has used its paths yet.
     importlib.reload(config)
 

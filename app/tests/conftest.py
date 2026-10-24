@@ -1,7 +1,7 @@
 """Point the app at throwaway folders before any test imports the server.
 
-The server's config reads CRYOAGENT_APP_HOME and CRYOAGENT_SESSION_DB at import
-time, so this runs first and keeps every test away from ~/.cryoagent. The
+The server's config reads CRYOPILOT_APP_HOME and CRYOPILOT_SESSION_DB at import
+time, so this runs first and keeps every test away from ~/.cryopilot. The
 access check reads CRYOPILOT_ALLOWED_HOSTS at import time too; TestClient
 sends ``Host: testserver``.
 """
@@ -12,8 +12,8 @@ import os
 import tempfile
 
 _home = tempfile.mkdtemp(prefix="cryopilot-tests-")
-os.environ.setdefault("CRYOAGENT_APP_HOME", _home)
-os.environ.setdefault("CRYOAGENT_SESSION_DB", os.path.join(_home, "sessions.sqlite3"))
+os.environ.setdefault("CRYOPILOT_APP_HOME", _home)
+os.environ.setdefault("CRYOPILOT_SESSION_DB", os.path.join(_home, "sessions.sqlite3"))
 os.environ.setdefault("CRYOPILOT_ALLOWED_HOSTS", "testserver")
 
 

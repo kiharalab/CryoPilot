@@ -560,6 +560,7 @@ class HarnessSessionTests(unittest.TestCase):
         self.assertEqual(len(workflow.project_creations), 1)
         self.assertEqual(len(workflow.workspace_creations), 1)
 
+
     def test_scope_recovers_tagged_objects_after_remote_create_before_db_update(self):
         session_id = self.create_session(status="initializing")
         marker = harness.session_scope_marker(session_id)
@@ -608,10 +609,10 @@ class HarnessSessionTests(unittest.TestCase):
     def test_parser_exposes_resume_database_and_rejects_old_cli_surface(self):
         parser = harness.build_parser()
         args = parser.parse_args(
-            ["--resume", "abc123", "--session-db", "/tmp/cryoagent-test.sqlite3"]
+            ["--resume", "abc123", "--session-db", "/tmp/cryopilot-test.sqlite3"]
         )
         self.assertEqual(args.resume, "abc123")
-        self.assertEqual(args.session_db, "/tmp/cryoagent-test.sqlite3")
+        self.assertEqual(args.session_db, "/tmp/cryopilot-test.sqlite3")
 
         destinations = {action.dest for action in parser._actions}
         self.assertNotIn("prompt", destinations)
@@ -735,7 +736,7 @@ class HarnessSessionTests(unittest.TestCase):
 
         with mock.patch.dict(
             os.environ,
-            {"CRYOAGENT_TEST_TOKEN": environment_secret},
+            {"CRYOPILOT_TEST_TOKEN": environment_secret},
             clear=False,
         ):
             self.activate(session_id)

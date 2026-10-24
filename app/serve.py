@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         epilog="To run it in the background instead: cryopilot start|stop|restart|status|log|password (add -h to each).",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: localhost only).")
-    parser.add_argument("--port", type=int, default=int(os.environ.get("CRYOAGENT_APP_PORT", "8790")))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("CRYOPILOT_APP_PORT", "8790")))
     parser.add_argument("--no-open", action="store_true", help="Do not open a browser window.")
     parser.add_argument(
         "--no-auth",

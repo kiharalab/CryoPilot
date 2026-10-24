@@ -18,7 +18,7 @@ from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 
 SCHEMA_VERSION = 2
-DEFAULT_DATABASE_PATH = Path("~/.cryoagent/sessions.sqlite3").expanduser()
+DEFAULT_DATABASE_PATH = Path("~/.cryopilot/sessions.sqlite3").expanduser()
 DEFAULT_RECURSION_CONFIG = {
     "max_depth": 4,
     "max_calls": 16,

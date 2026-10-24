@@ -250,7 +250,7 @@ function RememberRow() {
   return (
     <SettingsRow
       title="Remember passwords on this computer"
-      description="Keeps the API key and passwords in ~/.cryoagent/app/credentials.json, readable only by your user account. When this is off, you sign in again each time CryoPilot starts."
+      description="Keeps the API key and passwords in ~/.cryopilot/app/credentials.json, readable only by your user account. When this is off, you sign in again each time CryoPilot starts."
       htmlFor="settings-remember"
     >
       <Switch

@@ -68,7 +68,7 @@ because the reconstruction agent runs only on the computer where CryoSPARC is in
 
 URLs, emails, and user names are saved in the app database. Passwords and the API key stay in the
 server's memory, unless you turn on **Remember passwords on this computer**. They are then written to
-`~/.cryoagent/app/credentials.json` with mode 0600. When the server restarts without remembered
+`~/.cryopilot/app/credentials.json` with mode 0600. When the server restarts without remembered
 passwords, a sign-in screen asks for them again. `OPENAI_API_KEY`, `CRYOSPARC_BASE_URL`,
 `CRYOSPARC_EMAIL`, `CRYOSPARC_PASSWORD`, `CRYOZETA_BASE_URL`, `CRYOZETA_USERNAME`, and
 `CRYOZETA_PASSWORD` in the server environment are used as defaults. An agent process reads the
@@ -90,7 +90,7 @@ resolutions. When you are signed in to CryoSPARC, the server reads the jobs thro
 Otherwise it reads `job.json` from the project folder, because the server runs on the CryoSPARC computer.
 Map files are served from the project folder (or downloaded through cryosparc-tools when the folder is
 not readable). Maps larger than 256 voxels a side open as a binned preview, cached under
-`~/.cryoagent/app/cache/`; **View at full resolution** and **Download** use the original file.
+`~/.cryopilot/app/cache/`; **View at full resolution** and **Download** use the original file.
 
 **Use for modeling** attaches a map to a new modeling session. The server copies the map into the
 project's modeling workspace (`data/P61_J29_map_sharp.mrc`, for example), because the modeling agent's
@@ -101,15 +101,15 @@ the agent's request.
 
 | What | Path |
 | --- | --- |
-| App state (projects, sessions, modeling events, logs, settings) | `~/.cryoagent/app/app.sqlite3` |
-| Remembered passwords (only when turned on) | `~/.cryoagent/app/credentials.json` |
-| Uploads and reconstruction run folders | `~/.cryoagent/app/projects/<slug>/` |
-| Map previews, downloaded maps, CryoSPARC images | `~/.cryoagent/app/cache/` |
-| Reconstruction transcripts | `~/.cryoagent/sessions.sqlite3` (the harness database, shared with the CLI) |
-| Modeling conversation memory | `~/.cryoagent/app/modeling_sessions.sqlite3` |
-| Modeling workspace per project | `modeling_agent/workspaces/<slug>/` (`~/.cryoagent/app/modeling/workspaces/<slug>/` in the binary) |
+| App state (projects, sessions, modeling events, logs, settings) | `~/.cryopilot/app/app.sqlite3` |
+| Remembered passwords (only when turned on) | `~/.cryopilot/app/credentials.json` |
+| Uploads and reconstruction run folders | `~/.cryopilot/app/projects/<slug>/` |
+| Map previews, downloaded maps, CryoSPARC images | `~/.cryopilot/app/cache/` |
+| Reconstruction transcripts | `~/.cryopilot/sessions.sqlite3` (the harness database, shared with the CLI) |
+| Modeling conversation memory | `~/.cryopilot/app/modeling_sessions.sqlite3` |
+| Modeling workspace per project | `modeling_agent/workspaces/<slug>/` (`~/.cryopilot/app/modeling/workspaces/<slug>/` in the binary) |
 
-Set `CRYOAGENT_APP_HOME` to move the app state, and `CRYOAGENT_SESSION_DB` to point at a different
+Set `CRYOPILOT_APP_HOME` to move the app state, and `CRYOPILOT_SESSION_DB` to point at a different
 harness database.
 
 ## Code
@@ -170,7 +170,7 @@ one file that holds both agents, this web application, the DAQ model, VESPER, an
 no Python or Node.js. On first start it unpacks itself into `~/.cache/cryopilot/`. The code
 here supports that build: when the server runs compiled (`config.PACKAGED`), it starts agent processes
 by running its own executable, and it moves the modeling sandbox from `modeling_agent/` to
-`~/.cryoagent/app/modeling/`, passing it to the agent as `MODELING_AGENT_SANDBOX`.
+`~/.cryopilot/app/modeling/`, passing it to the agent as `MODELING_AGENT_SANDBOX`.
 
 ## Development
 

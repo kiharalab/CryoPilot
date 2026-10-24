@@ -43,7 +43,7 @@ from app.server.config import APP_HOME
 SETTINGS_PATH = APP_HOME / "server.json"
 PID_PATH = APP_HOME / "server.pid"
 LOG_PATH = APP_HOME / "server.log"
-DEFAULT_PORT = int(os.environ.get("CRYOAGENT_APP_PORT", "8790"))
+DEFAULT_PORT = int(os.environ.get("CRYOPILOT_APP_PORT", "8790"))
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 ALL_INTERFACES = {"0.0.0.0", "::"}
 START_TIMEOUT = 120.0
@@ -134,7 +134,8 @@ def addresses(host: str, port: int) -> list[str]:
         names = [host]
     links = []
     for name in names:
-        if not name or name in links or name.startswith("127.") or name == "localhost":
+        # A computer without a DNS name gets a reverse-lookup placeholder (….ip6.arpa) instead.
+        if not name or name in links or name.startswith("127.") or name == "localhost" or name.endswith(".arpa"):
             continue
         links.append(name)
     if not links:

@@ -125,7 +125,7 @@ class ChimeraXLaunchTests(unittest.TestCase):
                 self.assertIn("script error", str(raised.exception))
                 self.assertTrue(launched.call_args.kwargs["start_new_session"])
 
-    @unittest.skipUnless(os.environ.get("CRYOAGENT_TEST_CHIMERAX") == "1", "optional installed ChimeraX launcher test")
+    @unittest.skipUnless(os.environ.get("CRYOPILOT_TEST_CHIMERAX") == "1", "optional installed ChimeraX launcher test")
     def test_installed_chimerax_launches_script_with_config(self):
         self.assert_config_delivered(self.launch())
 

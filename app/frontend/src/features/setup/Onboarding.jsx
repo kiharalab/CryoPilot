@@ -372,7 +372,7 @@ function ReadyStep({ onBack, onDone }) {
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium text-fg">Remember passwords on this computer</span>
           <span className="mt-0.5 block text-sm text-muted">
-            Keeps them in ~/.cryoagent/app/credentials.json, readable only by your user account. When this is off, you sign in again each time
+            Keeps them in ~/.cryopilot/app/credentials.json, readable only by your user account. When this is off, you sign in again each time
             CryoPilot starts.
           </span>
         </span>

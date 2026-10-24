@@ -79,7 +79,7 @@ class PyMOLLaunchTests(unittest.TestCase):
             Image.new("RGB", (5, 5), "white").save(self.root / "render.png")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "not-a-real-secret", "CRYOAGENT_PYMOL_THREADS": "2"}), \
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "not-a-real-secret", "CRYOPILOT_PYMOL_THREADS": "2"}), \
              patch.object(tools, "ROOT", self.root), \
              patch.object(tools, "_pymol_executable", return_value="/path/to/pymol"), \
              patch.object(tools.subprocess, "run", side_effect=fake_run):

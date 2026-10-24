@@ -201,14 +201,14 @@ To check only ChimeraX startup and configuration transport, without opening any
 structure or map data:
 
 ```bash
-CRYOAGENT_TEST_CHIMERAX=1 .venv/bin/python -m unittest discover -s tests -p test_chimerax_support.py -v
+CRYOPILOT_TEST_CHIMERAX=1 .venv/bin/python -m unittest discover -s tests -p test_chimerax_support.py -v
 ```
 
 Optional smoke tests exercise installed VESPER, ChimeraX and PyMOL, plus a
 public crambin sequence search/download from PDB. They do not submit CryoZeta jobs:
 
 ```bash
-CRYOAGENT_TEST_VESPER=1 CRYOAGENT_TEST_PDB=1 CRYOAGENT_TEST_QSCORE=1 CRYOAGENT_TEST_PYMOL=1 .venv/bin/python -m unittest discover -s tests -v
+CRYOPILOT_TEST_VESPER=1 CRYOPILOT_TEST_PDB=1 CRYOPILOT_TEST_QSCORE=1 CRYOPILOT_TEST_PYMOL=1 .venv/bin/python -m unittest discover -s tests -v
 ```
 
 ## Files

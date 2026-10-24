@@ -1,4 +1,4 @@
-"""Offline tests for the CryoAgent web app server pieces.
+"""Offline tests for the CryoPilot web app server pieces.
 
 Run from the repository root:
     python -m pytest app/tests -q
