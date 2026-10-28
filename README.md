@@ -320,9 +320,9 @@ The tests run offline and do not need CryoSPARC, CryoZeta, or an API key.
 
 # License
 
-CryoPilot is free for noncommercial use under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). See [`LICENSE`](./LICENSE). Noncommercial use includes academic research, teaching, and personal study. Universities, research institutes, and government labs may use CryoPilot whatever their source of funding, and academic core facilities may use it for the services they charge for. The app asks you to accept the license the first time it opens.
+CryoPilot is free for noncommercial use under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). See [`LICENSE`](./LICENSE). Noncommercial use includes academic research, teaching, and personal study. Universities, research institutes, and government labs may use CryoPilot whatever their source of funding. The app asks you to accept the license the first time it opens.
 
-Commercial use needs a separate license from Purdue University. The agreement is in [`COMMERCIAL_LICENSE.md`](./COMMERCIAL_LICENSE.md). To request one, contact Daisuke Kihara (dkihara@purdue.edu).
+For commercial use, contact Daisuke Kihara (dkihara@purdue.edu). The commercial license agreement is in [`COMMERCIAL_LICENSE.md`](./COMMERCIAL_LICENSE.md).
 
 Versions 0.1.3 and earlier were released under the GNU General Public License v3.0, and copies of those versions stay under it.
 

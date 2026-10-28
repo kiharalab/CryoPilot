@@ -137,7 +137,7 @@ function Stepper({ current, reached, outcomes, onSelect }) {
         const reachable = index <= reached && index !== current
         const last = index === STEPS.length - 1
         return (
-          <li key={step.id} className={cx('flex min-w-0 items-center gap-1.5', !last && 'flex-1')}>
+          <li key={step.id} className={cx('flex min-w-0 items-center gap-1.5', !last && 'flex-auto')}>
             <button
               type="button"
               disabled={!reachable}

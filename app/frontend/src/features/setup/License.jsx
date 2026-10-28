@@ -68,7 +68,7 @@ export function LicenseStep({ onBack, onDone, changed = false }) {
         footer={<StepFooter onPrimary={() => setDeclined(false)} primaryLabel="Read the license again" />}
       >
         <p className="text-sm text-muted">
-          If you need CryoPilot for a company or another commercial purpose, ask Purdue University for a commercial license: contact <Contact />.
+          For commercial use, contact <Contact />.
         </p>
         <p className="mt-3 text-sm text-muted">
           Otherwise, close this tab. To stop CryoPilot, press Ctrl-C in the terminal where it runs, or run <Code>cryopilot stop</Code> if it runs in the
@@ -101,8 +101,7 @@ export function LicenseStep({ onBack, onDone, changed = false }) {
         <Info size={15} strokeWidth={1.75} className="mt-0.5 shrink-0 text-faint" />
         <p>
           Academic research, teaching, and personal study are noncommercial. Universities, research institutes, and government labs may use CryoPilot
-          whatever their funding, and academic core facilities may use it for the services they charge for. Companies need a commercial license from
-          Purdue University: contact <Contact />.
+          whatever their funding. For commercial use, contact <Contact />.
         </p>
       </div>
 
