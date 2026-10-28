@@ -61,10 +61,13 @@ separated; `--host 0.0.0.0` turns the host check off.
 
 ### First run and sign-in
 
-The first time, the app walks through five steps: the OpenAI API key, CryoSPARC (URL, email, and
-password), the CryoZeta account on the Kihara Lab EM server, the processing guide, and a check of the
-programs the modeling agent needs. On a computer that is not Linux the CryoSPARC step can be skipped,
-because the reconstruction agent runs only on the computer where CryoSPARC is installed.
+The first time, the app walks through six steps: the license agreement, the OpenAI API key, CryoSPARC
+(URL, email, and password), the CryoZeta account on the Kihara Lab EM server, the processing guide, and
+a check of the programs the modeling agent needs. On a computer that is not Linux the CryoSPARC step can
+be skipped, because the reconstruction agent runs only on the computer where CryoSPARC is installed.
+Agreeing to the license is saved in the app database (`license_accepted`), so on a shared server one
+person agrees for everyone. An install set up under an earlier license shows the agreement once on its
+own before the workspace.
 
 URLs, emails, and user names are saved in the app database. Passwords and the API key stay in the
 server's memory, unless you turn on **Remember passwords on this computer**. They are then written to
@@ -122,7 +125,7 @@ Server (`app/server/`):
 | `state.py` | Shared objects: database, event bus, agent processes, credentials, settings helpers |
 | `auth.py`, `password.py` | Access-token and password middleware, the sign-in routes, and the stored password hash |
 | `credentials.py` | API key and passwords, in memory or remembered |
-| `routes_setup.py`, `guides.py` | First-run setup, settings, connection tests, processing guides |
+| `routes_setup.py`, `guides.py` | License agreement, first-run setup, settings, connection tests, processing guides |
 | `routes_cryosparc.py`, `cryosparc_jobs.py`, `cryosparc_bridge.py`, `volumes.py` | CryoSPARC jobs, maps, previews, and job images |
 | `attachments.py` | Copies attached maps and files into the modeling workspace |
 | `routes_files.py`, `files.py` | Project file roots, browsing, previews, uploads, server path completion |

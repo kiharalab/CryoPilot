@@ -1,6 +1,7 @@
-// First-run setup: OpenAI, CryoSPARC, CryoZeta, the processing guide, then
-// a last look at the modeling toolchain. Each step saves as it goes, so
-// leaving halfway keeps what was entered; finishing marks setup complete.
+// First-run setup: the license, OpenAI, CryoSPARC, CryoZeta, the processing
+// guide, then a last look at the modeling toolchain. Each step saves as it
+// goes, so leaving halfway keeps what was entered; finishing marks setup
+// complete.
 import { useState } from 'react'
 import { Check, CircleCheck, Info } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -10,10 +11,12 @@ import { Button, InlineError, Switch } from '../../components/ui'
 import { BrandMark } from '../../layout/Brand'
 import { GuidePicker } from '../settings/GuidePicker'
 import { ToolchainStatus } from '../settings/ToolchainStatus'
-import { SetupPage } from './SetupPage'
+import { LicenseStep } from './License'
+import { SetupPage, StepFooter, StepLayout } from './SetupPage'
 import { ResultLine, ServiceFields, initialValues, isConfigured, isDirty, saveAndTest, systemName, validate } from './services'
 
 const STEPS = [
+  { id: 'license', label: 'License' },
   { id: 'openai', label: 'OpenAI' },
   { id: 'cryosparc', label: 'CryoSPARC' },
   { id: 'cryozeta', label: 'CryoZeta' },
@@ -24,9 +27,11 @@ const STEPS = [
 export function Onboarding({ onDone }) {
   const reconstructionSupported = useApp((state) => Boolean(state.setup?.platform?.reconstruction_supported))
   const system = useApp((state) => state.setup?.platform?.system)
-  const [index, setIndex] = useState(0)
-  const [reached, setReached] = useState(0)
-  const [outcomes, setOutcomes] = useState({}) // step id -> 'done' | 'skipped'
+  // Coming back to setup after accepting the license starts at the next step.
+  const licenseAccepted = useApp((state) => Boolean(state.setup?.license?.accepted))
+  const [index, setIndex] = useState(licenseAccepted ? 1 : 0)
+  const [reached, setReached] = useState(licenseAccepted ? 1 : 0)
+  const [outcomes, setOutcomes] = useState(licenseAccepted ? { license: 'done' } : {}) // step id -> 'done' | 'skipped'
   const [results, setResults] = useState({}) // service -> {tone, text}
 
   const step = STEPS[index]
@@ -48,13 +53,16 @@ export function Onboarding({ onDone }) {
   })
 
   return (
-    <SetupPage>
+    // Wide enough for six step labels and the license text.
+    <SetupPage width="max-w-[600px]">
       <div className="flex items-center gap-2.5">
         <BrandMark size={28} />
         <span className="text-base font-semibold tracking-[-0.01em]">Set up CryoPilot</span>
       </div>
 
       <Stepper current={index} reached={reached} outcomes={outcomes} onSelect={setIndex} />
+
+      {step.id === 'license' ? <LicenseStep onDone={() => finishStep('done')} /> : null}
 
       {step.id === 'openai' ? (
         <CredentialStep
@@ -123,20 +131,20 @@ const CIRCLE_STATES = {
 
 function Stepper({ current, reached, outcomes, onSelect }) {
   return (
-    <ol aria-label="Setup steps" className="mt-8 flex items-center gap-2">
+    <ol aria-label="Setup steps" className="mt-8 flex items-center gap-1.5">
       {STEPS.map((step, index) => {
         const state = index === current ? 'current' : outcomes[step.id] === 'done' ? 'done' : outcomes[step.id] === 'skipped' ? 'skipped' : 'upcoming'
         const reachable = index <= reached && index !== current
         const last = index === STEPS.length - 1
         return (
-          <li key={step.id} className={cx('flex min-w-0 items-center gap-2', !last && 'flex-1')}>
+          <li key={step.id} className={cx('flex min-w-0 items-center gap-1.5', !last && 'flex-1')}>
             <button
               type="button"
               disabled={!reachable}
               onClick={() => onSelect(index)}
               aria-current={index === current ? 'step' : undefined}
               aria-label={`${step.label}, step ${index + 1} of ${STEPS.length}${state === 'done' ? ', done' : state === 'skipped' ? ', skipped' : ''}`}
-              className="group flex shrink-0 items-center gap-2 rounded-md disabled:cursor-default"
+              className="group flex shrink-0 items-center gap-1.5 rounded-md disabled:cursor-default"
             >
               <span
                 aria-hidden
@@ -159,39 +167,6 @@ function Stepper({ current, reached, outcomes, onSelect }) {
         )
       })}
     </ol>
-  )
-}
-
-// ------------------------------------------------------------------- layout
-function StepLayout({ title, description, children, footer }) {
-  return (
-    <section className="mt-10 flex flex-1 flex-col">
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">{title}</h1>
-      {description ? <p className="mt-1.5 text-sm text-muted">{description}</p> : null}
-      <div className="mt-6">{children}</div>
-      <div className="mt-8 flex items-center gap-2">{footer}</div>
-    </section>
-  )
-}
-
-function StepFooter({ onBack, onSkip, primaryLabel = 'Continue', onPrimary, busy = false, primaryType = 'button' }) {
-  return (
-    <>
-      {onBack ? (
-        <Button variant="ghost" onClick={onBack} disabled={busy}>
-          Back
-        </Button>
-      ) : null}
-      <span className="flex-1" />
-      {onSkip ? (
-        <Button variant="ghost" onClick={onSkip} disabled={busy}>
-          Skip for now
-        </Button>
-      ) : null}
-      <Button type={primaryType} variant="primary" loading={busy} onClick={primaryType === 'submit' ? undefined : onPrimary}>
-        {primaryLabel}
-      </Button>
-    </>
   )
 }
 

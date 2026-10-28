@@ -254,6 +254,38 @@ def test_reconstruction_effort_accepts_none(client):
         client.put("/api/settings", json={"defaults": {"reconstruction_effort": ""}})
 
 
+# ----------------------------------------------------------------- license
+def test_license_is_served_and_accepting_it_is_remembered(client, monkeypatch):
+    from app.server import routes_setup
+
+    store.set_setting("license_accepted", None)
+    assert client.get("/api/setup").json()["license"] == {
+        "id": "PolyForm-Noncommercial-1.0.0",
+        "name": "PolyForm Noncommercial License 1.0.0",
+        "accepted": False,
+        "accepted_at": None,
+    }
+    license = client.get("/api/license").json()
+    assert license["accepted"] is False
+    assert "# PolyForm Noncommercial License 1.0.0" in license["text"]
+    assert "Required Notice: Copyright © 2026 Purdue University" in license["text"]
+
+    accepted = client.post("/api/license/accept").json()["license"]
+    assert accepted["accepted"] is True and accepted["accepted_at"]
+    assert client.get("/api/setup").json()["license"]["accepted"] is True
+
+    # A different license asks everyone again.
+    monkeypatch.setattr(routes_setup, "LICENSE_ID", "Some-Other-License")
+    assert client.get("/api/setup").json()["license"]["accepted"] is False
+    store.set_setting("license_accepted", None)
+
+
+def test_license_needs_the_access_check():
+    anonymous = TestClient(app)
+    assert anonymous.get("/api/license").status_code == 401
+    assert anonymous.post("/api/license/accept").status_code == 401
+
+
 # ------------------------------------------------------------------ resume
 def _resume_fixture(monkeypatch, sandbox, *, provider: str | None):
     project = make_project(f"Resume {provider}")

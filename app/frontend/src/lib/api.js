@@ -66,12 +66,14 @@ export const api = {
   logout: () => request('/api/auth/logout', { method: 'POST' }),
 
   // ------------------------------------------------------- setup/settings
-  // Setup payload: {onboarded, platform:{system, reconstruction_supported},
+  // Setup payload: {license:{id, name, accepted, accepted_at}, onboarded, platform:{system, reconstruction_supported},
   //   openai:{configured, source}, cryosparc:{url, email, password_set, verified_at},
   //   cryozeta:{base_url, username, password_set, verified_at}, processing_guide,
   //   remember_credentials, defaults:{reconstruction_model, reconstruction_effort,
   //   modeling_model, modeling_effort, modeling_max_turns}, modeling_tools}
   setup: () => request('/api/setup'),
+  license: () => request('/api/license'), // {id, name, accepted, accepted_at, text}
+  acceptLicense: () => request('/api/license/accept', { method: 'POST' }), // -> setup payload
   completeSetup: () => request('/api/setup/complete', { method: 'POST' }),
   // body: {openai:{api_key}|{clear:true}, cryosparc:{url,email,password,clear_password},
   //        cryozeta:{base_url,username,password,clear_password}, processing_guide,

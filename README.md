@@ -219,7 +219,7 @@ source .venv/bin/activate
 
 Start the server from the binary (`cryopilot`) or from source (`python app/serve.py`). It listens on `127.0.0.1:8790`, prints an access link such as `http://127.0.0.1:8790/?token=...`, and opens it in your browser. The token keeps other users of a shared computer out of your sessions. A new token is made each time the server starts, so you open the new link after a restart. Set `CRYOPILOT_TOKEN` (at least 22 characters) to keep the same link.
 
-The first time, CryoPilot asks for your OpenAI API key, your CryoSPARC URL, email, and password, and your CryoZeta account, and which processing guide the reconstruction agent follows. It also shows which modeling programs it found. Passwords stay in the server's memory unless you choose to remember them on this computer.
+The first time, CryoPilot asks you to agree to its license, then asks for your OpenAI API key, your CryoSPARC URL, email, and password, and your CryoZeta account, and which processing guide the reconstruction agent follows. It also shows which modeling programs it found. Passwords stay in the server's memory unless you choose to remember them on this computer.
 
 The window has three columns, and you can drag each divider:
 
@@ -320,9 +320,13 @@ The tests run offline and do not need CryoSPARC, CryoZeta, or an API key.
 
 # License
 
-CryoPilot is released under the GNU General Public License v3.0 (GPL v3). See [`LICENSE`](./LICENSE).
+CryoPilot is free for noncommercial use under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). See [`LICENSE`](./LICENSE). Noncommercial use includes academic research, teaching, and personal study. Universities, research institutes, and government labs may use CryoPilot whatever their source of funding, and academic core facilities may use it for the services they charge for. The app asks you to accept the license the first time it opens.
 
-It includes the DAQ model and scoring code from [DAQ](https://github.com/kiharalab/DAQ) (GPL-3.0, [`modeling_agent/vendor/daqcore/LICENSE`](./modeling_agent/vendor/daqcore/LICENSE)), and the Linux binary includes a build of [VESPER](https://github.com/kiharalab/VESPER) under its own license. CryoSPARC, CryoZeta, PyMOL, ChimeraX, Phenix, and Rosetta are separate programs with their own licenses and are not distributed here.
+Commercial use needs a separate license from Purdue University. The agreement is in [`COMMERCIAL_LICENSE.md`](./COMMERCIAL_LICENSE.md). To request one, contact Daisuke Kihara (dkihara@purdue.edu).
+
+Versions 0.1.3 and earlier were released under the GNU General Public License v3.0, and copies of those versions stay under it.
+
+CryoPilot includes the DAQ model and scoring code from [DAQ](https://github.com/kiharalab/DAQ), which is licensed with CryoPilot under the same terms ([`modeling_agent/vendor/daqcore/LICENSE`](./modeling_agent/vendor/daqcore/LICENSE)). The Linux binary includes a build of [VESPER](https://github.com/kiharalab/VESPER) under its own license (GPL-3.0). CryoSPARC, CryoZeta, PyMOL, ChimeraX, Phenix, and Rosetta are separate programs with their own licenses and are not distributed here.
 
 # Citation
 

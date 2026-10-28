@@ -1,9 +1,12 @@
-// Gates, in order: the access token, first-run setup, then signing in to the
-// services whose passwords are not remembered. After that, the workspace.
+// Gates, in order: the access token, first-run setup (which starts with the
+// license agreement), the license again for installs set up under an earlier
+// license, then signing in to the services whose passwords are not
+// remembered. After that, the workspace.
 import { useCallback, useEffect, useState } from 'react'
 import { api, onUnauthorized } from './lib/api'
 import { useApp } from './store/app'
 import { AccessGate } from './features/auth/AccessGate'
+import { LicenseGate } from './features/setup/License'
 import { Onboarding } from './features/setup/Onboarding'
 import { SignIn } from './features/setup/SignIn'
 import { Workspace } from './layout/Workspace'
@@ -86,6 +89,7 @@ export function App() {
   }
   if (!auth.authenticated) return <AccessGate method={auth.method} onDone={check} />
   if (!setup.onboarded) return <Onboarding onDone={refreshSetup} />
+  if (!setup.license.accepted) return <LicenseGate onDone={refreshSetup} />
   if (signInOpen) {
     return (
       <SignIn

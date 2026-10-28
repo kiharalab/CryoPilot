@@ -116,7 +116,7 @@ function GeneralSection() {
 }
 
 // ------------------------------------------------------------------- about
-const VERSION = '0.1.3'
+const VERSION = '0.2.0'
 
 function ExternalAnchor({ href, children }) {
   return (
@@ -147,7 +147,7 @@ function AboutSection() {
           <span className="text-sm text-muted">In submission</span>
         </SettingsRow>
         <SettingsRow title="License">
-          <span className="text-sm text-muted">GNU General Public License v3.0</span>
+          <span className="text-sm text-muted">PolyForm Noncommercial 1.0.0</span>
         </SettingsRow>
         <SettingsRow title="Website">
           <ExternalAnchor href="https://cryopilot.vercel.app">cryopilot.vercel.app</ExternalAnchor>

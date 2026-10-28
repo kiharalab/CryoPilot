@@ -1,4 +1,4 @@
-"""Health, first-run setup, settings, credentials, and processing guides."""
+"""Health, the license, first-run setup, settings, credentials, and processing guides."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 
 from . import cryosparc_bridge, cryozeta_bridge, guides, modeling_toolchain
-from .config import HARNESS_SESSION_DB, MODELING_PYTHON
+from .config import HARNESS_SESSION_DB, MODELING_PYTHON, REPO_ROOT
 from .state import (
     RECONSTRUCTION_EFFORTS,
     RECONSTRUCTION_SUPPORTED,
@@ -33,6 +33,11 @@ router = APIRouter()
 
 OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
 
+# Accepting a different license (a new ID) asks everyone to accept again.
+LICENSE_ID = "PolyForm-Noncommercial-1.0.0"
+LICENSE_NAME = "PolyForm Noncommercial License 1.0.0"
+LICENSE_FILE = REPO_ROOT / "LICENSE"
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -42,8 +47,15 @@ def _openai_view() -> dict[str, Any]:
     return {"configured": bool(openai_key()), "source": credentials.source("openai_api_key")}
 
 
+def _license_view() -> dict[str, Any]:
+    accepted = store.get_setting("license_accepted") or {}
+    current = accepted.get("license") == LICENSE_ID
+    return {"id": LICENSE_ID, "name": LICENSE_NAME, "accepted": current, "accepted_at": accepted.get("accepted_at") if current else None}
+
+
 def setup_view() -> dict[str, Any]:
     return {
+        "license": _license_view(),
         "onboarded": bool(store.get_setting("onboarded", False)),
         "platform": {"system": SYSTEM, "reconstruction_supported": RECONSTRUCTION_SUPPORTED},
         "openai": _openai_view(),
@@ -67,6 +79,22 @@ def health() -> dict[str, Any]:
         "modeling_python": MODELING_PYTHON,
         **setup_view(),
     }
+
+
+# ----------------------------------------------------------------- license
+@router.get("/api/license")
+def get_license() -> dict[str, Any]:
+    try:
+        text = LICENSE_FILE.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise api_error(500, f"Could not read the license: {exc}")
+    return {**_license_view(), "text": text}
+
+
+@router.post("/api/license/accept")
+def accept_license() -> dict[str, Any]:
+    store.set_setting("license_accepted", {"license": LICENSE_ID, "accepted_at": _now()})
+    return setup_view()
 
 
 # ------------------------------------------------------------------- setup
