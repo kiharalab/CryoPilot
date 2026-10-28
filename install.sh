@@ -3,14 +3,20 @@
 #
 #   curl -fsSL https://cryopilot.vercel.app/install.sh | sh
 #
-# Downloads the CryoPilot binary from kiharalab.org, checks its SHA-256, puts it
-# in ~/.local/share/cryopilot/, links it as ~/.local/bin/cryopilot, and adds
-# ~/.local/bin to PATH in your shell's startup file if it is not there yet.
+# Downloads the CryoPilot binary from kiharalab.org, checks its SHA-256, keeps it
+# in ~/.local/share/cryopilot/, puts the cryopilot command in ~/.local/bin, and
+# adds ~/.local/bin to PATH in your shell's startup file if it is not there yet.
+# In a terminal it first asks where each part goes and whether to change PATH;
+# press Enter to keep the default. Without a terminal, or with --yes, it uses
+# the defaults without asking:
 #
-# Settings (environment variables):
-#   CRYOPILOT_VERSION        a version such as 0.1.0 (default: the version below)
+#   curl -fsSL https://cryopilot.vercel.app/install.sh | sh -s -- --yes
+#
+# Settings (environment variables), which are also the defaults it offers:
+#   CRYOPILOT_VERSION        a version such as 0.2.0 (default: the version below)
 #   CRYOPILOT_INSTALL_DIR    where the binary is kept (default: ~/.local/share/cryopilot)
 #   CRYOPILOT_BIN_DIR        where the cryopilot command goes (default: ~/.local/bin)
+#   CRYOPILOT_CACHE          where the first start unpacks the program (default: ~/.cache/cryopilot)
 #   CRYOPILOT_NO_MODIFY_PATH set to 1 to leave your shell startup files alone
 #
 # Everything runs inside main(), so a download cut short runs nothing.
@@ -33,7 +39,78 @@ fetch() {  # fetch URL OUTPUT
     fi
 }
 
+# Questions are read from the terminal, not from standard input: under
+# curl | sh, standard input is this script.
+can_ask() { (: </dev/tty) 2>/dev/null; }
+
+ask() {  # ask QUESTION DEFAULT: prints the answer, or DEFAULT for an empty one
+    printf '%s [%s]: ' "$1" "$2" >/dev/tty
+    IFS= read -r reply </dev/tty || reply=
+    reply=$(printf '%s' "$reply" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    printf '%s' "${reply:-$2}"
+}
+
+confirm() {  # confirm QUESTION: succeeds for yes, the default
+    while :; do
+        printf '%s [Y/n]: ' "$1" >/dev/tty
+        IFS= read -r reply </dev/tty || return 1
+        case $reply in
+            '' | [Yy] | [Yy][Ee][Ss]) return 0 ;;
+            [Nn] | [Nn][Oo]) return 1 ;;
+        esac
+    done
+}
+
+absolute() {  # absolute PATH: PATH with a leading ~ expanded, made absolute
+    case $1 in
+        '~') path=$HOME ;;
+        '~/'*) path=$HOME/${1#??} ;;
+        /*) path=$1 ;;
+        *) path=$PWD/$1 ;;
+    esac
+    [ "$path" = / ] || path=${path%/}
+    printf '%s' "$path"
+}
+
+short() {  # short PATH: PATH with your home folder written as ~
+    case $1 in
+        "$HOME") printf '~' ;;
+        "$HOME"/*) printf '~/%s' "${1#"$HOME"/}" ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
+writable() {  # writable FOLDER: FOLDER, or the part of it that exists, is a folder you can write to
+    dir=$1
+    while [ ! -e "$dir" ]; do dir=$(dirname "$dir"); done
+    [ -d "$dir" ] && [ -w "$dir" ]
+}
+
+ask_folder() {  # ask_folder QUESTION DEFAULT: prints a folder you can write to
+    while :; do
+        folder=$(absolute "$(ask "$1" "$(short "$2")")")
+        if writable "$folder"; then
+            printf '%s' "$folder"
+            return 0
+        fi
+        printf 'You cannot write to %s. Choose another folder.\n' "$folder" >/dev/tty
+    done
+}
+
+quote() {  # quote TEXT: TEXT in single quotes, for a shell script
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
 main() {
+    questions=1
+    for arg in "$@"; do
+        case $arg in
+            -y | --yes) questions=0 ;;
+            *) die "unknown option $arg. Use --yes to install with the defaults and no questions." ;;
+        esac
+    done
+    [ "$questions" = 1 ] && can_ask || questions=0
+
     [ "$(uname -s)" = Linux ] || die "the CryoPilot binary is for Linux."
     [ "$(uname -m)" = x86_64 ] || die "the CryoPilot binary is for x86_64; this computer is $(uname -m)."
 
@@ -41,8 +118,57 @@ main() {
     version=${version#v}
     binary=cryopilot-$version-linux-x86_64
     url=$DOWNLOADS/v$(printf '%s' "$version" | tr . _)/$binary
-    install_dir=${CRYOPILOT_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/cryopilot}
-    bin_dir=${CRYOPILOT_BIN_DIR:-$HOME/.local/bin}
+    install_dir=$(absolute "${CRYOPILOT_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/cryopilot}")
+    bin_dir=$(absolute "${CRYOPILOT_BIN_DIR:-$HOME/.local/bin}")
+    default_cache=$(absolute "${XDG_CACHE_HOME:-$HOME/.cache}/cryopilot")
+    cache_dir=$(absolute "${CRYOPILOT_CACHE:-$default_cache}")
+    if [ "${CRYOPILOT_NO_MODIFY_PATH:-0}" = 1 ]; then modify_path=0; else modify_path=1; fi
+    case ${SHELL:-} in
+        */zsh) rc=$HOME/.zshrc ;;
+        */bash) rc=$HOME/.bashrc ;;
+        *) rc=$HOME/.profile ;;
+    esac
+
+    if [ "$questions" = 1 ]; then
+        say "This installs CryoPilot $version. Press Enter to keep the answer in brackets."
+        say ""
+        install_dir=$(ask_folder "Folder for the program (about 265 MB)" "$install_dir")
+        bin_dir=$(ask_folder "Folder for the cryopilot command" "$bin_dir")
+        cache_dir=$(ask_folder "Folder that the first start unpacks into (about 730 MB)" "$cache_dir")
+    fi
+
+    case ":$PATH:" in
+        *":$bin_dir:"*) on_path=1 ;;
+        *) on_path=0 ;;
+    esac
+    line="export PATH=\"$bin_dir:\$PATH\"  # added by the CryoPilot installer"
+    if grep -Fqs "$line" "$rc"; then in_rc=1; else in_rc=0; fi
+    if [ "$questions" = 1 ]; then
+        if [ "$on_path" = 0 ] && [ "$in_rc" = 0 ] && [ "$modify_path" = 1 ]; then
+            if confirm "Add $(short "$bin_dir") to PATH in $(short "$rc")?"; then modify_path=1; else modify_path=0; fi
+        fi
+        if [ "$on_path" = 1 ]; then
+            path_plan="already on PATH"
+        elif [ "$in_rc" = 1 ]; then
+            path_plan="on PATH through $(short "$rc")"
+        elif [ "$modify_path" = 1 ]; then
+            path_plan="added to PATH in $(short "$rc")"
+        else
+            path_plan="not added to PATH"
+        fi
+        say ""
+        say "CryoPilot $version will be installed like this:"
+        say "  Program:  $(short "$install_dir/$binary")"
+        say "  Command:  $(short "$bin_dir/cryopilot") ($path_plan)"
+        say "  Unpacks:  $(short "$cache_dir")/ (on the first start)"
+        say ""
+        if ! confirm "Install now?"; then
+            say "Nothing was installed."
+            exit 0
+        fi
+        say ""
+    fi
+
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT
 
@@ -53,35 +179,48 @@ main() {
         (cd "$work" && sha256sum -c "$binary.sha256" >/dev/null 2>&1) || die "the download is damaged (checksum mismatch). Run the installer again."
     fi
 
-    mkdir -p "$install_dir" "$bin_dir"
+    mkdir -p "$install_dir" "$bin_dir" || die "cannot create $install_dir or $bin_dir."
     chmod 755 "$work/$binary"
     mv -f "$work/$binary" "$install_dir/$binary"
-    ln -sf "$install_dir/$binary" "$bin_dir/cryopilot"
-    say "Installed $install_dir/$binary"
-    say "Linked $bin_dir/cryopilot"
+    say "Installed $(short "$install_dir/$binary")"
+    # Remove the old command first: writing through a link would overwrite the binary.
+    rm -f "$bin_dir/cryopilot"
+    if [ "$cache_dir" = "$default_cache" ]; then
+        ln -s "$install_dir/$binary" "$bin_dir/cryopilot"
+        say "Linked $(short "$bin_dir/cryopilot")"
+    else
+        # The command is a small script that tells the binary where to unpack.
+        cat > "$bin_dir/cryopilot" <<EOF
+#!/bin/sh
+# Starts CryoPilot. Written by the CryoPilot installer. The first start unpacks
+# the program into the folder below unless CRYOPILOT_CACHE is set.
+CRYOPILOT_CACHE=\${CRYOPILOT_CACHE:-$(quote "$cache_dir")}
+export CRYOPILOT_CACHE
+exec $(quote "$install_dir/$binary") "\$@"
+EOF
+        chmod 755 "$bin_dir/cryopilot"
+        say "Wrote $(short "$bin_dir/cryopilot")"
+    fi
 
-    case ":$PATH:" in
-        *":$bin_dir:"*) on_path=1 ;;
-        *) on_path=0 ;;
-    esac
-    if [ "$on_path" = 0 ] && [ "${CRYOPILOT_NO_MODIFY_PATH:-0}" != 1 ]; then
-        case ${SHELL:-} in
-            */zsh) rc=$HOME/.zshrc ;;
-            */bash) rc=$HOME/.bashrc ;;
-            *) rc=$HOME/.profile ;;
-        esac
-        line="export PATH=\"$bin_dir:\$PATH\"  # added by the CryoPilot installer"
-        if ! grep -Fqs "$line" "$rc"; then
-            printf '\n%s\n' "$line" >> "$rc"
-            say "Added $bin_dir to PATH in $rc"
+    command=cryopilot
+    if [ "$on_path" = 0 ]; then
+        if [ "$in_rc" = 1 ] || [ "$modify_path" = 1 ]; then
+            if [ "$in_rc" = 0 ]; then
+                printf '\n%s\n' "$line" >> "$rc"
+                say "Added $(short "$bin_dir") to PATH in $(short "$rc")"
+            fi
+            say ""
+            say "Open a new terminal, or run:  export PATH=\"$bin_dir:\$PATH\""
+        else
+            command=$bin_dir/cryopilot
+            say ""
+            say "$(short "$bin_dir") is not on your PATH, so start CryoPilot by its full path."
         fi
-        say ""
-        say "Open a new terminal, or run:  export PATH=\"$bin_dir:\$PATH\""
     fi
 
     say ""
-    say "Start CryoPilot with:  cryopilot"
-    say "The first start unpacks the program (about 730 MB) into ~/.cache/cryopilot/."
+    say "Start CryoPilot with:  $command"
+    say "The first start unpacks the program (about 730 MB) into $(short "$cache_dir")/."
 }
 
 main "$@"

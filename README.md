@@ -113,7 +113,7 @@ On the CryoSPARC machine, run:
 curl -fsSL https://cryopilot.vercel.app/install.sh | sh
 ```
 
-The installer downloads the binary from kiharalab.org, checks its SHA-256, keeps it in `~/.local/share/cryopilot/`, links it as `~/.local/bin/cryopilot`, and adds `~/.local/bin` to your PATH. Open a new terminal and start it with `cryopilot`. You can also download `cryopilot-<version>-linux-x86_64` from <https://cryopilot.vercel.app>, then run `chmod +x` on it and start it directly.
+The installer asks where to keep the program (`~/.local/share/cryopilot/` by default), where to put the `cryopilot` command (`~/.local/bin`), where the first start unpacks it (`~/.cache/cryopilot/`), and whether to add the command's folder to your PATH. Press Enter to keep each default. It then downloads the binary from kiharalab.org and checks its SHA-256. To install with the defaults and no questions, run `curl -fsSL https://cryopilot.vercel.app/install.sh | sh -s -- --yes`. Open a new terminal and start it with `cryopilot`. You can also download `cryopilot-<version>-linux-x86_64` from <https://cryopilot.vercel.app>, then run `chmod +x` on it and start it directly.
 
 The binary is one file that contains both agents, the web application, the DAQ model, VESPER, and ripgrep. It does not need Python or Node.js. Install PyMOL, ChimeraX, Phenix, and Rosetta separately for modeling. The first start unpacks the program (about 800 MB) into `~/.cache/cryopilot/`, which takes 10 to 30 seconds; later starts begin at once. Set `CRYOPILOT_CACHE` to unpack it elsewhere.
 
