@@ -20,8 +20,8 @@ export function modelService(model) {
   return String(model || '').startsWith('claude-') ? 'anthropic' : 'openai'
 }
 
-/** Claude models the reconstruction agent can run on, newest and most capable first. */
-export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
+/** Claude models the reconstruction agent can run on, most capable first. */
+export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5']
 
 /** "CryoZeta, the Kihara Lab EM server": a service's name where a screen introduces it. */
 export function ServiceTitle({ service }) {
@@ -155,13 +155,33 @@ export async function saveAndTest(service, values, setup) {
 }
 
 // ------------------------------------------------------------ OpenAI models
-const SUGGESTED_MODELS = ['gpt-5.5', 'gpt-5', 'gpt-5-mini']
+/** OpenAI models to offer: GPT-5.5, the default used in the paper, then the newest ones. */
+export const OPENAI_MODELS = ['gpt-5.5', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6.1-terra', 'gpt-5.6-sol', 'gpt-5.6-luna']
+
+// Reasoning efforts the newest OpenAI models accept, from their model pages:
+// none of them takes 'minimal', and GPT-6 Astra and GPT-6.1 Sol always reason.
+// Other models, and Claude models (whose client maps the levels), take every level offered.
+const ALWAYS_REASONS = ['low', 'medium', 'high', 'xhigh', 'max']
+const MODEL_EFFORTS = {
+  'gpt-6-astra': ALWAYS_REASONS,
+  'gpt-6.1-sol': ALWAYS_REASONS,
+  'gpt-6.1-terra': ['none', ...ALWAYS_REASONS],
+  'gpt-5.6': ['none', ...ALWAYS_REASONS],
+  'gpt-5.6-sol': ['none', ...ALWAYS_REASONS],
+  'gpt-5.6-luna': ['none', ...ALWAYS_REASONS],
+}
+
+/** Whether `model` accepts reasoning `effort`. */
+export function supportsEffort(model, effort) {
+  const efforts = MODEL_EFFORTS[model]
+  return !efforts || efforts.includes(effort)
+}
 let accountModelsPromise = null
 
 function modelRank(id) {
-  const match = /^gpt-(\d+)(?:\.(\d+))?(?:-(pro|mini|nano))?$/.exec(id)
+  const match = /^gpt-(\d+)(?:\.(\d+))?(?:-(astra|pro|sol|terra|mini|luna|nano))?$/.exec(id)
   if (!match) return null
-  const tier = { undefined: 0, pro: 1, mini: 2, nano: 3 }[match[3]]
+  const tier = { astra: 0, undefined: 1, pro: 2, sol: 3, terra: 4, mini: 5, luna: 6, nano: 7 }[match[3]]
   return { major: Number(match[1]), minor: Number(match[2] || 0), tier }
 }
 
@@ -181,7 +201,7 @@ function rememberModels(models) {
 
 /** Model names to suggest: the account's GPT models once known, else a short default list. */
 export function suggestedModels(accountModels) {
-  const merged = [...SUGGESTED_MODELS, ...(accountModels || [])]
+  const merged = [...OPENAI_MODELS, ...(accountModels || [])]
   return [...new Set(merged)].slice(0, 10)
 }
 

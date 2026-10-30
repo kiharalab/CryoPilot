@@ -200,9 +200,10 @@ export function Segmented({ value, onChange, options, size = 'md', className, ar
             type="button"
             role="radio"
             aria-checked={selected}
+            disabled={option.disabled}
             onClick={() => onChange(option.value)}
             className={cx(
-              'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors',
+              'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
               size === 'sm' ? 'h-6 px-2 text-xs' : 'h-7 px-3 text-sm',
               selected ? 'bg-elevated text-fg ring-1 ring-line' : 'text-muted hover:text-fg',
             )}

@@ -6,7 +6,7 @@ import { BookOpen, Check, ChevronDown } from 'lucide-react'
 import { cx } from '../../lib/cx'
 import { pluralize } from '../../lib/format'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui'
-import { CLAUDE_MODELS } from '../setup/services'
+import { CLAUDE_MODELS, OPENAI_MODELS, supportsEffort } from '../setup/services'
 
 export const EFFORTS = [
   { value: 'minimal', label: 'Minimal' },
@@ -19,8 +19,6 @@ export const EFFORTS = [
 // The reconstruction agent also runs without reasoning (harness.py
 // --reasoning-effort none); the modeling agent does not.
 export const RECONSTRUCTION_EFFORTS = [{ value: 'none', label: 'None' }, ...EFFORTS]
-
-const MODEL_SUGGESTIONS = ['gpt-5.5']
 
 export function effortLabel(effort) {
   return RECONSTRUCTION_EFFORTS.find((option) => option.value === effort)?.label || effort
@@ -88,13 +86,19 @@ function Choice({ selected, onSelect, disabled, children, className }) {
 export function ModelChip({ model, effort, onModelChange, onEffortChange, defaultModel, efforts = EFFORTS, claude = false, disabled }) {
   const [open, setOpen] = useState(false)
   const [custom, setCustom] = useState('')
-  const suggestions = [...new Set([defaultModel, ...MODEL_SUGGESTIONS, ...(claude ? CLAUDE_MODELS : []), model].filter(Boolean))]
+  const suggestions = [...new Set([defaultModel, ...OPENAI_MODELS, ...(claude ? CLAUDE_MODELS : []), model].filter(Boolean))]
   const customLabel = claude ? 'Another OpenAI or Claude model' : 'Another OpenAI model'
+
+  // A model that does not accept the chosen effort starts at Low instead.
+  const chooseModel = (next) => {
+    onModelChange(next)
+    if (!supportsEffort(next, effort)) onEffortChange('low')
+  }
 
   const applyCustom = () => {
     const next = custom.trim()
     if (!next) return
-    onModelChange(next)
+    chooseModel(next)
     setCustom('')
   }
 
@@ -116,7 +120,7 @@ export function ModelChip({ model, effort, onModelChange, onEffortChange, defaul
         <div role="menu" aria-label="Model">
           <ChoiceHeader>Model</ChoiceHeader>
           {suggestions.map((name) => (
-            <Choice key={name} selected={name === model} onSelect={() => onModelChange(name)}>
+            <Choice key={name} selected={name === model} onSelect={() => chooseModel(name)}>
               <span className="block truncate font-mono text-[12.5px]">{name}</span>
             </Choice>
           ))}
@@ -142,7 +146,12 @@ export function ModelChip({ model, effort, onModelChange, onEffortChange, defaul
         <div role="menu" aria-label="Reasoning effort">
           <ChoiceHeader>Reasoning effort</ChoiceHeader>
           {efforts.map((option) => (
-            <Choice key={option.value} selected={option.value === effort} onSelect={() => onEffortChange(option.value)}>
+            <Choice
+              key={option.value}
+              selected={option.value === effort}
+              disabled={!supportsEffort(model, option.value)}
+              onSelect={() => onEffortChange(option.value)}
+            >
               {option.label}
             </Choice>
           ))}

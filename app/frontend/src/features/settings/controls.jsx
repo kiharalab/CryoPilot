@@ -7,7 +7,7 @@ import { cx } from '../../lib/cx'
 import { useApp } from '../../store/app'
 import { Input, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Segmented } from '../../components/ui'
 import { EFFORTS } from '../new/AgentChips'
-import { CLAUDE_MODELS, loadAccountModels, suggestedModels } from '../setup/services'
+import { CLAUDE_MODELS, loadAccountModels, suggestedModels, supportsEffort } from '../setup/services'
 
 /** Saves a settings change and puts the new setup in the store. Throws after toasting on failure. */
 export function useSaveSettings() {
@@ -158,7 +158,11 @@ export function ModelInput({ id, value, onCommit, invalid, className, claude = f
   )
 }
 
-/** Reasoning effort as a segmented control; `options` defaults to the efforts both agents accept. */
-export function EffortPicker({ value, onChange, options = EFFORTS, ariaLabel = 'Reasoning effort' }) {
-  return <Segmented value={value} onChange={onChange} options={options} size="sm" ariaLabel={ariaLabel} />
+/**
+ * Reasoning effort as a segmented control; `options` defaults to the efforts
+ * both agents accept. Levels that `model` does not accept are disabled.
+ */
+export function EffortPicker({ value, onChange, options = EFFORTS, model, ariaLabel = 'Reasoning effort' }) {
+  const choices = options.map((option) => ({ ...option, disabled: !supportsEffort(model, option.value) }))
+  return <Segmented value={value} onChange={onChange} options={choices} size="sm" ariaLabel={ariaLabel} />
 }

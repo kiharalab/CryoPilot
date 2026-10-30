@@ -198,7 +198,7 @@ export function NewModeling({ initialAttachments }) {
   return (
     <div className="relative flex h-full flex-col" {...dropHandlers}>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="@container mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center px-6 pb-[12vh] pt-10">
+        <div className="@container mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center px-4 pb-[12vh] pt-10 sm:px-6">
           <h1 className="mb-6 text-center text-2xl font-semibold tracking-[-0.02em] text-fg">What should the modeling agent do?</h1>
 
           <div className="mb-3 flex flex-col gap-2 empty:hidden">

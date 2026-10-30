@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../../store/app'
 import { Input } from '../../components/ui'
 import { RECONSTRUCTION_EFFORTS } from '../new/AgentChips'
+import { supportsEffort } from '../setup/services'
 import { EffortPicker, ModelInput, SettingsGroup, SettingsRow, useSaveSettings } from './controls'
 import { GuidePicker } from './GuidePicker'
 import { ToolchainStatus } from './ToolchainStatus'
@@ -25,7 +26,11 @@ function useDefaultsSaver() {
       return false
     }
   }
-  return { errors, setErrors, saveDefault }
+  // A default model that does not accept the default effort moves it to Low.
+  const saveModel = async (modelKey, effortKey, model, effort) => {
+    if ((await saveDefault(modelKey, model)) && !supportsEffort(model, effort)) await saveDefault(effortKey, 'low')
+  }
+  return { errors, setErrors, saveDefault, saveModel }
 }
 
 export function ReconstructionSection() {
@@ -33,7 +38,7 @@ export function ReconstructionSection() {
   const defaults = useApp((state) => state.setup?.defaults) || {}
   const save = useSaveSettings()
   const [guideSaving, setGuideSaving] = useState(false)
-  const { errors, saveDefault } = useDefaultsSaver()
+  const { errors, saveDefault, saveModel } = useDefaultsSaver()
 
   const chooseGuide = async (id) => {
     setGuideSaving(true)
@@ -68,13 +73,14 @@ export function ReconstructionSection() {
             claude
             value={defaults.reconstruction_model}
             invalid={Boolean(errors.reconstruction_model)}
-            onCommit={(model) => saveDefault('reconstruction_model', model)}
+            onCommit={(model) => saveModel('reconstruction_model', 'reconstruction_effort', model, defaults.reconstruction_effort)}
           />
         </SettingsRow>
         <SettingsRow title="Reasoning effort" description="Higher effort plans each step more carefully and takes longer." error={errors.reconstruction_effort}>
           <EffortPicker
             value={defaults.reconstruction_effort}
             options={RECONSTRUCTION_EFFORTS}
+            model={defaults.reconstruction_model}
             onChange={(effort) => saveDefault('reconstruction_effort', effort)}
           />
         </SettingsRow>
@@ -119,7 +125,7 @@ function MaxTurnsInput({ id, value, onCommit, invalid }) {
 
 export function ModelingSection() {
   const defaults = useApp((state) => state.setup?.defaults) || {}
-  const { errors, setErrors, saveDefault } = useDefaultsSaver()
+  const { errors, setErrors, saveDefault, saveModel } = useDefaultsSaver()
 
   const saveTurns = (text) => {
     const turns = Number(text)
@@ -139,11 +145,15 @@ export function ModelingSection() {
             className="w-56"
             value={defaults.modeling_model}
             invalid={Boolean(errors.modeling_model)}
-            onCommit={(model) => saveDefault('modeling_model', model)}
+            onCommit={(model) => saveModel('modeling_model', 'modeling_effort', model, defaults.modeling_effort)}
           />
         </SettingsRow>
         <SettingsRow title="Reasoning effort" description="Higher effort reasons more about each fit and edit and takes longer." error={errors.modeling_effort}>
-          <EffortPicker value={defaults.modeling_effort} onChange={(effort) => saveDefault('modeling_effort', effort)} />
+          <EffortPicker
+            value={defaults.modeling_effort}
+            model={defaults.modeling_model}
+            onChange={(effort) => saveDefault('modeling_effort', effort)}
+          />
         </SettingsRow>
         <SettingsRow
           title="Maximum turns"

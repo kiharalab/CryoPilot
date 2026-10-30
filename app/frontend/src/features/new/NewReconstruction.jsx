@@ -348,7 +348,7 @@ export function NewReconstruction() {
   return (
     <div className="flex h-full flex-col">
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="@container mx-auto flex w-full max-w-[760px] flex-col gap-5 px-6 pb-6 pt-6">
+        <div className="@container mx-auto flex w-full max-w-[760px] flex-col gap-5 px-4 pb-6 pt-6 sm:px-6">
           <div>
             <h1 className="text-xl font-semibold tracking-[-0.015em] text-fg">Start a reconstruction</h1>
             <p className="mt-1 max-w-[620px] text-sm text-muted">
@@ -531,7 +531,7 @@ export function NewReconstruction() {
         </div>
       </div>
 
-      <div className="shrink-0 px-6 pb-5 pt-1">
+      <div className="shrink-0 px-4 pb-4 pt-1 sm:px-6 sm:pb-5">
         <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3">
           {missingSetup.map((service) => (
             <SetupNotice key={service} settingsSection="accounts">

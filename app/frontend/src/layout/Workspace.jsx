@@ -1,9 +1,12 @@
 // The main window: sidebar | conversation | workbench (viewer, maps, DAQ,
 // files) over the terminal. Every divider can be dragged; the sidebar, the
-// workbench, and the terminal also collapse from the keyboard.
-import { useEffect, useMemo, useRef } from 'react'
+// workbench, and the terminal also collapse from the keyboard. On a narrow
+// screen, such as a phone, the sidebar and the right column open over the
+// conversation instead.
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Group, Panel, Separator, useDefaultLayout, useGroupRef, usePanelRef } from 'react-resizable-panels'
 import { useApp } from '../store/app'
+import { cx } from '../lib/cx'
 import { hasModKey } from '../lib/platform'
 import { SettingsDialog } from '../features/settings/SettingsDialog'
 import { Sidebar } from './Sidebar'
@@ -30,6 +33,12 @@ const safeStorage = {
 /** Workbench over terminal when both are open, until the user drags the divider. */
 const DEFAULT_SPLIT = { workbench: 64, bottom: 36 }
 
+/**
+ * Narrower than the minimum widths of the three columns (216 + 380 + 320 px),
+ * the side columns cannot open beside the conversation, so they open over it.
+ */
+const COMPACT_QUERY = '(max-width: 919px)'
+
 /** Shortcuts that also work while typing; the others leave text fields alone. */
 const TYPING_SHORTCUTS = new Set(['k', ','])
 
@@ -37,6 +46,18 @@ function isTextEntry(target) {
   if (!(target instanceof HTMLElement)) return false
   if (target.isContentEditable || target instanceof HTMLTextAreaElement) return true
   return target instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file'].includes(target.type)
+}
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    const onChange = () => setMatches(media.matches)
+    onChange()
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [query])
+  return matches
 }
 
 /**
@@ -72,14 +93,61 @@ function useCollapsible(panelRef, groupElementRef, open, setOpen, preferred) {
 export function Workspace() {
   const loadProjects = useApp((state) => state.loadProjects)
   const toast = useApp((state) => state.toast)
+  const toggleSidebar = useApp((state) => state.toggleSidebar)
+  const toggleWorkbench = useApp((state) => state.toggleWorkbench)
+  const toggleBottom = useApp((state) => state.toggleBottom)
+  const openSettings = useApp((state) => state.openSettings)
+  const navigate = useApp((state) => state.navigate)
+  const compact = useMediaQuery(COMPACT_QUERY)
+
+  useEffect(() => {
+    loadProjects().catch((err) => toast({ title: 'Could not load projects', description: err.message, tone: 'error' }))
+  }, [loadProjects, toast])
+
+  const shortcuts = useMemo(
+    () => ({
+      b: () => toggleSidebar(),
+      j: () => toggleBottom(),
+      '\\': () => toggleWorkbench(),
+      ',': () => openSettings(),
+      k: () => navigate({ name: 'home' }),
+    }),
+    [toggleSidebar, toggleBottom, toggleWorkbench, openSettings, navigate],
+  )
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.defaultPrevented || !hasModKey(event) || event.altKey || event.shiftKey) return
+      const key = event.key.toLowerCase()
+      const action = shortcuts[key]
+      if (!action) return
+      const target = event.target instanceof Element ? event.target : null
+      // Leave keys to the terminal while it has focus, and to open dialogs.
+      if (target?.closest('.xterm, [role="dialog"]')) return
+      if (isTextEntry(target) && !TYPING_SHORTCUTS.has(key)) return
+      event.preventDefault()
+      action()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [shortcuts])
+
+  return (
+    <div className="flex h-full bg-canvas text-fg">
+      {compact ? <Overlays /> : <Columns />}
+      <SettingsDialog />
+    </div>
+  )
+}
+
+/** Wide screens: the three columns side by side, with draggable dividers. */
+function Columns() {
   const sidebarOpen = useApp((state) => state.sidebarOpen)
   const workbenchOpen = useApp((state) => state.workbenchOpen)
   const bottomOpen = useApp((state) => state.bottomOpen)
   const toggleSidebar = useApp((state) => state.toggleSidebar)
   const toggleWorkbench = useApp((state) => state.toggleWorkbench)
   const toggleBottom = useApp((state) => state.toggleBottom)
-  const openSettings = useApp((state) => state.openSettings)
-  const navigate = useApp((state) => state.navigate)
 
   const columnsRef = useRef(null)
   const sidebarRef = usePanelRef()
@@ -94,10 +162,6 @@ export function Workspace() {
     const saved = inner.defaultLayout
     split.current = saved?.workbench >= 1 && saved?.bottom >= 1 ? { workbench: saved.workbench, bottom: saved.bottom } : DEFAULT_SPLIT
   }
-
-  useEffect(() => {
-    loadProjects().catch((err) => toast({ title: 'Could not load projects', description: err.message, tone: 'error' }))
-  }, [loadProjects, toast])
 
   // The right column collapses as a whole when neither the workbench nor the
   // terminal is open. Inside it the two always fill the height, so they are
@@ -145,81 +209,127 @@ export function Workspace() {
     toggleBottom(bottom)
   }
 
-  const shortcuts = useMemo(
-    () => ({
-      b: () => toggleSidebar(),
-      j: () => toggleBottom(),
-      '\\': () => toggleWorkbench(),
-      ',': () => openSettings(),
-      k: () => navigate({ name: 'home' }),
-    }),
-    [toggleSidebar, toggleBottom, toggleWorkbench, openSettings, navigate],
+  return (
+    <Group
+      orientation="horizontal"
+      id="cryopilot-columns"
+      elementRef={columnsRef}
+      defaultLayout={outer.defaultLayout}
+      onLayoutChanged={outer.onLayoutChanged}
+    >
+      <Panel
+        id="sidebar"
+        panelRef={sidebarRef}
+        defaultSize={264}
+        minSize={216}
+        maxSize={420}
+        collapsible
+        collapsedSize={0}
+        groupResizeBehavior="preserve-pixel-size"
+        onResize={onSidebarResize}
+        className="bg-sidebar"
+      >
+        <Sidebar />
+      </Panel>
+      <Separator className="resize-handle" />
+      <Panel id="main" minSize={380}>
+        <MainColumn />
+      </Panel>
+      <Separator className="resize-handle" />
+      <Panel id="right" panelRef={rightRef} defaultSize="42%" minSize={320} collapsible collapsedSize={0} onResize={onRightResize}>
+        <Group
+          orientation="vertical"
+          id="cryopilot-right"
+          groupRef={innerRef}
+          defaultLayout={inner.defaultLayout}
+          onLayoutChanged={onInnerLayoutChanged}
+        >
+          <Panel id="workbench" defaultSize="64%" minSize={160} collapsible collapsedSize={0}>
+            <RightColumn.Workbench />
+          </Panel>
+          <Separator className="resize-handle" />
+          <Panel id="bottom" defaultSize="36%" minSize={120} collapsible collapsedSize={0}>
+            <RightColumn.Bottom />
+          </Panel>
+        </Group>
+      </Panel>
+    </Group>
   )
+}
+
+/**
+ * Narrow screens: the conversation fills the window, the sidebar slides in
+ * over it, and the workbench and terminal cover it. Both stay mounted while
+ * hidden, so Mol* scenes and terminals survive closing them.
+ */
+function Overlays() {
+  const view = useApp((state) => state.view)
+  const projectId = useApp((state) => state.project?.id)
+  const sidebarOpen = useApp((state) => state.sidebarOpen)
+  const workbenchOpen = useApp((state) => state.workbenchOpen)
+  const bottomOpen = useApp((state) => state.bottomOpen)
+  const toggleSidebar = useApp((state) => state.toggleSidebar)
+  const toggleWorkbench = useApp((state) => state.toggleWorkbench)
+  const toggleBottom = useApp((state) => state.toggleBottom)
+  const rightOpen = workbenchOpen || bottomOpen
+
+  // Open panels would hide the conversation, so start with all of them closed
+  // (before the first paint, so they do not flash open).
+  useLayoutEffect(() => {
+    toggleWorkbench(false)
+    toggleBottom(false)
+  }, [toggleWorkbench, toggleBottom])
+  // Choosing a session or a project in the sidebar shows it.
+  useLayoutEffect(() => {
+    toggleSidebar(false)
+  }, [view, projectId, toggleSidebar])
 
   useEffect(() => {
+    if (!sidebarOpen && !rightOpen) return undefined
     const onKeyDown = (event) => {
-      if (event.defaultPrevented || !hasModKey(event) || event.altKey || event.shiftKey) return
-      const key = event.key.toLowerCase()
-      const action = shortcuts[key]
-      if (!action) return
-      const target = event.target instanceof Element ? event.target : null
-      // Leave keys to the terminal while it has focus, and to open dialogs.
-      if (target?.closest('.xterm, [role="dialog"]')) return
-      if (isTextEntry(target) && !TYPING_SHORTCUTS.has(key)) return
-      event.preventDefault()
-      action()
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      // Leave Escape to the terminal, dialogs, and menus.
+      if (event.target instanceof Element && event.target.closest('.xterm, [role="dialog"], [role="menu"]')) return
+      if (sidebarOpen) {
+        toggleSidebar(false)
+      } else {
+        toggleWorkbench(false)
+        toggleBottom(false)
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [shortcuts])
+  }, [sidebarOpen, rightOpen, toggleSidebar, toggleWorkbench, toggleBottom])
 
   return (
-    <div className="flex h-full bg-canvas text-fg">
-      <Group
-        orientation="horizontal"
-        id="cryopilot-columns"
-        elementRef={columnsRef}
-        defaultLayout={outer.defaultLayout}
-        onLayoutChanged={outer.onLayoutChanged}
+    <div className="relative h-full min-w-0 flex-1">
+      <MainColumn />
+      <div className={cx('fixed inset-0 z-40 flex flex-col bg-canvas', !rightOpen && 'invisible')} inert={!rightOpen}>
+        <div className={cx('min-h-0', !workbenchOpen ? 'hidden' : bottomOpen ? 'flex-[64]' : 'flex-1')}>
+          <RightColumn.Workbench />
+        </div>
+        <div className={cx('min-h-0', !bottomOpen ? 'hidden' : workbenchOpen ? 'flex-[36] border-t border-line' : 'flex-1')}>
+          <RightColumn.Bottom />
+        </div>
+      </div>
+      <div
+        className={cx('fixed inset-0 z-50 transition-[visibility] duration-200 motion-reduce:transition-none', !sidebarOpen && 'invisible')}
+        inert={!sidebarOpen}
       >
-        <Panel
-          id="sidebar"
-          panelRef={sidebarRef}
-          defaultSize={264}
-          minSize={216}
-          maxSize={420}
-          collapsible
-          collapsedSize={0}
-          groupResizeBehavior="preserve-pixel-size"
-          onResize={onSidebarResize}
-          className="bg-sidebar"
+        <div
+          aria-hidden
+          onClick={() => toggleSidebar(false)}
+          className={cx('absolute inset-0 bg-overlay transition-opacity duration-200 motion-reduce:transition-none', sidebarOpen ? 'opacity-100' : 'opacity-0')}
+        />
+        <div
+          className={cx(
+            'absolute inset-y-0 left-0 w-[min(300px,85vw)] bg-sidebar shadow-dialog transition-transform duration-200 motion-reduce:transition-none',
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          )}
         >
           <Sidebar />
-        </Panel>
-        <Separator className="resize-handle" />
-        <Panel id="main" minSize={380}>
-          <MainColumn />
-        </Panel>
-        <Separator className="resize-handle" />
-        <Panel id="right" panelRef={rightRef} defaultSize="42%" minSize={320} collapsible collapsedSize={0} onResize={onRightResize}>
-          <Group
-            orientation="vertical"
-            id="cryopilot-right"
-            groupRef={innerRef}
-            defaultLayout={inner.defaultLayout}
-            onLayoutChanged={onInnerLayoutChanged}
-          >
-            <Panel id="workbench" defaultSize="64%" minSize={160} collapsible collapsedSize={0}>
-              <RightColumn.Workbench />
-            </Panel>
-            <Separator className="resize-handle" />
-            <Panel id="bottom" defaultSize="36%" minSize={120} collapsible collapsedSize={0}>
-              <RightColumn.Bottom />
-            </Panel>
-          </Group>
-        </Panel>
-      </Group>
-      <SettingsDialog />
+        </div>
+      </div>
     </div>
   )
 }

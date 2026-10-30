@@ -116,7 +116,7 @@ function GeneralSection() {
 }
 
 // ------------------------------------------------------------------- about
-const VERSION = '0.2.0'
+const VERSION = '0.3.0'
 
 function ExternalAnchor({ href, children }) {
   return (

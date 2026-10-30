@@ -52,7 +52,7 @@ export function Home() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="@container mx-auto flex min-h-full w-full max-w-[720px] flex-col justify-center px-6 pb-[10vh] pt-10">
+      <div className="@container mx-auto flex min-h-full w-full max-w-[720px] flex-col justify-center px-4 pb-[10vh] pt-10 sm:px-6">
         <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg">{project.title}</h1>
         {project.description ? <p className="mt-1.5 line-clamp-3 text-base text-muted">{project.description}</p> : null}
 

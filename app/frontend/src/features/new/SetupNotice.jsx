@@ -38,7 +38,8 @@ export function SetupNotice({ tone = 'warning', children, settingsSection, actio
       {action ||
         (settingsSection ? (
           <Button size="sm" variant="secondary" onClick={() => openSettings(settingsSection)}>
-            Open settings
+            <span className="hidden sm:inline">Open settings</span>
+            <span className="sm:hidden">Settings</span>
           </Button>
         ) : null)}
     </div>

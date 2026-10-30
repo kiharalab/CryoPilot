@@ -120,7 +120,7 @@ export const Composer = forwardRef(function Composer(
           )}
         />
         <div className="flex items-center gap-1 px-2 pb-2 pt-1">
-          <div className="flex min-w-0 flex-1 items-center gap-1">{toolbarLeft}</div>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">{toolbarLeft}</div>
           {toolbarRight ? <div className="flex items-center gap-1">{toolbarRight}</div> : null}
           {running ? (
             <Tip label="Stop the agent">
