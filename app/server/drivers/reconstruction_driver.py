@@ -45,6 +45,7 @@ import llm_client  # noqa: E402
 from cryosparc_repl import connect_cryosparc  # noqa: E402
 from session_store import SessionStore  # noqa: E402
 from startup_cli import (  # noqa: E402
+    EXISTING_PROJECT,
     build_developer_instruction,
     build_user_prompt,
     collect_cryosparc_credentials,
@@ -188,7 +189,10 @@ def start_new(args: argparse.Namespace, store: SessionStore, reader: CommandRead
     H.configure_session_runtime(store, session_id)
     H.configure_recursion_config(recursion_config)
     H.register_sensitive_value(credentials["password"])
-    status("initializing", "Creating the CryoSPARC project and workspace")
+    if manifest["dataset"]["kind"] == EXISTING_PROJECT:
+        status("initializing", f"Opening CryoSPARC project {manifest['project']['project_uid']} and creating a workspace")
+    else:
+        status("initializing", "Creating the CryoSPARC project and workspace")
     bound_manifest = H.ensure_session_scope(csw, store, session_id)
     SCOPE_BOUND["value"] = True
     emitter.emit(
@@ -197,7 +201,7 @@ def start_new(args: argparse.Namespace, store: SessionStore, reader: CommandRead
         workspace_uid=bound_manifest["project"]["workspace_uid"],
     )
     developer = f"{H.INSTRUCTIONS}\n\n{build_developer_instruction(bound_manifest)}"
-    prompt = build_user_prompt(bound_manifest)
+    prompt = build_user_prompt(bound_manifest, H.earlier_session_notes(store, bound_manifest, session_id))
     run_turn(store, session_id, prompt=prompt, developer=developer)
     command_loop(store, session_id, reader, initial_continuation_required=True)
     return session_id
@@ -244,7 +248,7 @@ def start_resume(args: argparse.Namespace, store: SessionStore, reader: CommandR
             command_loop(store, session_id, reader, initial_continuation_required=True)
     else:
         developer = f"{H.INSTRUCTIONS}\n\n{build_developer_instruction(manifest)}"
-        prompt = build_user_prompt(manifest)
+        prompt = build_user_prompt(manifest, H.earlier_session_notes(store, manifest, session_id))
         run_turn(store, session_id, prompt=prompt, developer=developer)
         command_loop(store, session_id, reader, initial_continuation_required=True)
     return session_id

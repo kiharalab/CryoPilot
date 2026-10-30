@@ -12,7 +12,7 @@ from unittest import mock
 import harness
 import llm_client
 from session_store import SessionStore
-from startup_cli import bind_manifest_scope
+from startup_cli import bind_manifest_scope, continuation_manifest
 
 
 def manifest_template():
@@ -564,6 +564,85 @@ class HarnessSessionTests(unittest.TestCase):
         self.assertEqual(len(workflow.project_creations), 1)
         self.assertEqual(len(workflow.workspace_creations), 1)
 
+
+    def create_continuation(self, project_uid):
+        return self.store.create_session(
+            provider="anthropic",
+            model="claude-sonnet-5-5",
+            reasoning={"effort": "xhigh"},
+            compact_config={"enabled": True},
+            cryosparc_url="https://cryosparc.example.test",
+            cryosparc_email="scientist@example.test",
+            manifest=continuation_manifest(project_uid=project_uid, project_title="Started by hand", user_goal="Refine further"),
+            status="initializing",
+        )
+
+    def test_a_continuation_binds_the_existing_project_and_creates_only_its_workspace(self):
+        session_id = self.create_continuation("P7")
+        marker = harness.session_scope_marker(session_id)
+        workflow = FakeWorkflow()
+        workflow.projects["P7"] = FakeProject("P7", "")
+        workflow.projects["P7"].workspaces["W5"] = FakeController("W5", "")
+
+        manifest = harness.ensure_session_scope(workflow, self.store, session_id)
+
+        self.assertEqual(workflow.project_creations, [])
+        self.assertEqual(workflow.workspace_creations, [{"title": "Automated Reconstruction", "desc": marker}])
+        self.assertEqual(manifest["project"]["project_uid"], "P7")
+        self.assertEqual(manifest["project"]["workspace_uid"], "W1")
+        self.assertIn("W5", workflow.projects["P7"].workspaces)
+        session = self.store.get_session(session_id)
+        self.assertEqual((session.project_uid, session.workspace_uid), ("P7", "W1"))
+        # Resuming finds the same workspace instead of making another.
+        self.assertEqual(harness.ensure_session_scope(workflow, self.store, session_id), manifest)
+        self.assertEqual(len(workflow.workspace_creations), 1)
+
+    def test_a_continuation_of_a_missing_project_stops_without_creating_anything(self):
+        session_id = self.create_continuation("P99")
+        workflow = FakeWorkflow()
+
+        with self.assertRaisesRegex(RuntimeError, "CryoSPARC project P99 was not found"):
+            harness.ensure_session_scope(workflow, self.store, session_id)
+        self.assertEqual(workflow.project_creations, [])
+        self.assertEqual(workflow.workspace_creations, [])
+        self.assertIsNone(self.store.get_session(session_id).project_uid)
+
+    def test_a_continuation_quotes_the_projects_earlier_sessions_newest_first(self):
+        older = self.create_session(status="initializing")
+        self.store.update_scope(older, project_uid="P7", workspace_uid="W1")
+        self.store.append_items(older, "model", [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Ab initio done."}]}])
+        self.store.set_status(older, "completed")
+        failed = self.create_session(status="initializing")
+        self.store.update_scope(failed, project_uid="P7", workspace_uid="W2")
+        self.store.append_items(failed, "model", [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Reviewing the J23 class sheet."}]}])
+        self.store.set_status(failed, "error", last_error="Error code: 400 - 33411 patches")
+        elsewhere = self.create_session(status="initializing")
+        self.store.update_scope(elsewhere, project_uid="P8", workspace_uid="W1")
+        current = self.create_continuation("P7")
+        self.store.update_scope(current, project_uid="P7", workspace_uid="W3")
+        manifest = self.store.get_session(current).manifest
+
+        notes = harness.earlier_session_notes(self.store, manifest, current)
+
+        self.assertEqual([note["id"] for note in notes], [failed, older])
+        self.assertEqual(notes[0]["status"], "error")
+        self.assertEqual(notes[0]["last_error"], "Error code: 400 - 33411 patches")
+        self.assertEqual(notes[0]["last_message"], "Reviewing the J23 class sheet.")
+        self.assertEqual(notes[1]["last_message"], "Ab initio done.")
+        self.assertEqual(harness.earlier_session_notes(self.store, manifest_template(), current), [])
+
+    def test_sessions_in_a_project_are_listed_newest_first(self):
+        first = self.create_session(status="initializing")
+        second = self.create_session(status="initializing")
+        for session_id in (first, second):
+            self.store.update_scope(session_id, project_uid="P7", workspace_uid="W1")
+
+        listed = [session.id for session in self.store.sessions_in_project("P7")]
+
+        self.assertEqual(set(listed), {first, second})
+        created = {session.id: session.created_at for session in self.store.sessions_in_project("P7")}
+        self.assertEqual(listed, sorted(created, key=created.get, reverse=True))
+        self.assertEqual(self.store.sessions_in_project("P1"), [])
 
     def test_scope_recovers_tagged_objects_after_remote_create_before_db_update(self):
         session_id = self.create_session(status="initializing")

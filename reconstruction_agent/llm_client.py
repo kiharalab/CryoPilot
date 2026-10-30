@@ -16,6 +16,7 @@ import copy
 import hashlib
 import io
 import json
+import math
 import os
 from types import SimpleNamespace
 
@@ -28,6 +29,10 @@ PROVIDERS = ("openai", "anthropic", "ollama")
 OLLAMA_BASE_URL = "http://localhost:11434/v1/"
 OLLAMA_API_KEY = "ollama"
 OLLAMA_MODEL = "gemma4:12b-mlx"
+# GPT-6 and GPT-5.6 models read an image at its full size in 32 px patches,
+# and reject an image of more than 30,000 patches instead of shrinking it.
+OPENAI_IMAGE_PATCH = 32
+OPENAI_IMAGE_MAX_PATCHES = 30_000
 DEFAULT_MODELS = {
     "openai": os.environ.get("OPENAI_MODEL", "gpt-5.5"),
     "anthropic": os.environ.get("ANTHROPIC_MODEL", "claude-opus-5-5"),
@@ -203,12 +208,18 @@ def normalize_native_response_input(value, *, top_level=False):
     return copy.deepcopy(value)
 
 
+def image_patches(width, height):
+    """The number of patches an OpenAI model reads an image of this size in."""
+    return math.ceil(width / OPENAI_IMAGE_PATCH) * math.ceil(height / OPENAI_IMAGE_PATCH)
+
+
 class OpenAIResponsesClient:
     """The OpenAI Responses API.
 
     With ``native=False`` it talks to a Responses-compatible server such as
     Ollama, which takes no reasoning settings, structured output, or OpenAI's
-    stateless replay options.
+    stateless replay options. For OpenAI, images over the patch limit are
+    shrunk until they fit, because the API rejects them.
     """
 
     provider = "openai"
@@ -217,6 +228,7 @@ class OpenAIResponsesClient:
         self.sdk = sdk
         self.native = native
         self.reasoning_effort = reasoning_effort
+        self._images = {}
 
     def create(self, **request):
         if not self.native:
@@ -225,6 +237,7 @@ class OpenAIResponsesClient:
             return self.sdk.responses.create(**request)
         if "input" in request:
             request["input"] = normalize_native_response_input(request["input"])
+            self.fit_images(request["input"])
         if self.reasoning_effort:
             request.setdefault("reasoning", {"effort": self.reasoning_effort})
         request.setdefault("store", False)
@@ -233,6 +246,54 @@ class OpenAIResponsesClient:
             include.append("reasoning.encrypted_content")
         request["include"] = include
         return self.sdk.responses.create(**request)
+
+    def fit_images(self, value):
+        """Fits, in place, every image in a request copy to the patch limit."""
+        if isinstance(value, list):
+            for item in value:
+                self.fit_images(item)
+        elif isinstance(value, dict):
+            url = value.get("image_url")
+            if value.get("type") == "input_image" and isinstance(url, str) and url.startswith("data:"):
+                value["image_url"] = self.fit_image(url)
+                return
+            for item in value.values():
+                self.fit_images(item)
+
+    def fit_image(self, url):
+        """The image as an OpenAI model accepts it: at most
+        OPENAI_IMAGE_MAX_PATCHES patches, shrunk no more than that needs. The
+        result is the same every time for the same image, so earlier turns are
+        sent unchanged."""
+
+        key = hashlib.sha256(url.encode("ascii")).hexdigest()
+        if key in self._images:
+            return self._images[key]
+        header, _, data = url.partition(",")
+        fitted = url
+        image = None
+        if header.endswith(";base64"):
+            try:
+                image = Image.open(io.BytesIO(base64.b64decode(data)))
+            except (OSError, ValueError):
+                pass  # not an image PIL reads: sent as it is, for the API to judge
+        if image is not None:
+            with image:
+                width, height = image.size
+                patches = image_patches(width, height)
+                if patches > OPENAI_IMAGE_MAX_PATCHES:
+                    scale = math.sqrt(OPENAI_IMAGE_MAX_PATCHES / patches)
+                    size = (max(1, int(width * scale)), max(1, int(height * scale)))
+                    while image_patches(*size) > OPENAI_IMAGE_MAX_PATCHES:
+                        scale *= 0.99
+                        size = (max(1, int(width * scale)), max(1, int(height * scale)))
+                    if image.mode not in {"RGB", "RGBA", "L", "LA"}:
+                        image = image.convert("RGBA")
+                    buffer = io.BytesIO()
+                    image.resize(size, Image.Resampling.LANCZOS).save(buffer, format="PNG")
+                    fitted = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+        self._images[key] = fitted
+        return fitted
 
 
 # ---------------------------------------------------------------- Anthropic

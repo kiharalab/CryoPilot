@@ -499,6 +499,59 @@ class ParticleExtractionSafetyTests(unittest.TestCase):
         self.assertIn("Post-extraction review required", description)
 
 
+class WorkspaceGuardTests(unittest.TestCase):
+    """A session changes only the jobs in its own workspace."""
+
+    def setUp(self):
+        self.workflow = CryoSPARCWorkflow(FakeCS([]))
+        self.workflow.project = types.SimpleNamespace(model=types.SimpleNamespace(uid="P65"))
+        self.workflow.workspace = types.SimpleNamespace(model=types.SimpleNamespace(uid="W3"))
+        self.deleted = []
+        self.workflow.cs.api.jobs = types.SimpleNamespace(delete=lambda project, job: self.deleted.append(job))
+
+    def job(self, uid, workspace_uids):
+        job = FakeJob(uid, "homo_refine_new", {"volume": input_spec("volume")}, {})
+        job.model.workspace_uids = workspace_uids
+        job.cleared = False
+        job.clear = lambda: setattr(job, "cleared", True)
+        return job
+
+    def test_jobs_in_other_workspaces_cannot_be_changed(self):
+        theirs = self.job("J5", ["W1"])
+        self.workflow.cs.find_job = lambda project, uid: theirs
+        actions = {
+            "queue": lambda: self.workflow.queue(theirs),
+            "queue_and_wait": lambda: self.workflow.queue_and_wait(theirs),
+            "clear": lambda: self.workflow.clear(theirs),
+            "kill": lambda: self.workflow.kill(theirs),
+            "delete": lambda: self.workflow.delete("J5"),
+            "connect": lambda: self.workflow.connect(theirs, "volume", "J2", "volume"),
+        }
+        theirs.refresh = lambda: None
+        for name, action in actions.items():
+            with self.subTest(action=name):
+                with self.assertRaisesRegex(PermissionError, "J5: it is in workspace W1, not this session's workspace W3"):
+                    action()
+        self.assertEqual(theirs.queue_calls, [])
+        self.assertFalse(theirs.cleared)
+        self.assertEqual(theirs.connections, {})
+        self.assertEqual(self.deleted, [])
+
+    def test_own_jobs_can_be_changed_and_take_inputs_from_anywhere(self):
+        mine = self.job("J9", ["W3"])
+        self.workflow.cs.find_job = lambda project, uid: mine
+
+        self.workflow.connect(mine, "volume", "J5", "volume")
+        self.workflow.queue(mine)
+        self.workflow.clear(mine)
+        self.workflow.delete("J9")
+
+        self.assertEqual(mine.connections, {"volume": ("J5", "volume")})
+        self.assertEqual(len(mine.queue_calls), 1)
+        self.assertTrue(mine.cleared)
+        self.assertEqual(self.deleted, ["J9"])
+
+
 class CryoSPARCWrapperParityTests(unittest.TestCase):
     def setUp(self):
         self.specs = wrapper_specs()

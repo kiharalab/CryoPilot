@@ -79,6 +79,35 @@ def test_manifest_validates_numbers_and_eer():
     assert manifest["dataset"]["gain_reference_path"] == "/g.mrc"
 
 
+def test_continuation_manifest_needs_only_a_project_and_a_goal():
+    manifest = build_manifest(
+        {
+            "dataset_kind": "existing_project",
+            "existing_project_uid": " p65 ",
+            "existing_project_title": "Apoferritin 10146",
+            "particle_diameter_A": "",
+            "expected_symmetry": "O",
+            "user_goal": "Refine the best map further",
+        }
+    )
+    assert manifest["dataset"]["kind"] == "existing_project"
+    assert manifest["project"]["project_uid"] == "P65"
+    assert manifest["project"]["title"] == "Apoferritin 10146"
+    assert manifest["project"]["parent_directory"] is None
+    assert manifest["sample"]["particle_diameter_A"] is None
+    assert manifest["sample"]["expected_symmetry"] == "O"
+    bound = bind_manifest_scope(manifest, session_id="s1", project_uid="P65", workspace_uid="W4")
+    developer = build_developer_instruction(bound)
+    assert "Do not create an import job" in developer and "csw.import_movies" not in developer
+
+    with pytest.raises(ManifestError) as info:
+        build_manifest({"dataset_kind": "existing_project", "existing_project_uid": "65"})
+    assert info.value.errors == {"existing_project_uid": "Enter a project UID such as P12", "user_goal": "Required"}
+    with pytest.raises(ManifestError) as info:
+        build_manifest({"dataset_kind": "existing_project", "user_goal": "Refine"})
+    assert info.value.errors == {"existing_project_uid": "Choose a CryoSPARC project"}
+
+
 def test_particles_manifest_keeps_metadata_path():
     manifest = build_manifest(full_form(dataset_kind="particles", particle_metadata_path="/p.star", dataset_path="/p/*.mrcs"))
     assert manifest["dataset"]["particle_metadata_path"] == "/p.star"

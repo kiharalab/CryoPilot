@@ -12,9 +12,9 @@ from typing import Any
 from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 
-from . import cryosparc_jobs, volumes
+from . import cryosparc_bridge, cryosparc_jobs, volumes
 from .cryosparc_jobs import CryoSPARCError
-from .state import api_error, require_project, require_session
+from .state import api_error, cryosparc_credentials, require_project, require_session
 
 router = APIRouter()
 
@@ -36,6 +36,16 @@ def _reconstruction_session(session_id: str) -> dict[str, Any]:
 
 def _error(exc: CryoSPARCError):
     return api_error(exc.status, exc.message, **exc.extra)
+
+
+@router.get("/api/cryosparc/projects")
+def list_cryosparc_projects() -> dict[str, Any]:
+    """The signed-in account's CryoSPARC projects, for continuing one."""
+    credentials = cryosparc_credentials()
+    try:
+        return {"projects": cryosparc_bridge.list_projects(credentials)}
+    except Exception as exc:
+        raise api_error(502, f"Could not list the CryoSPARC projects: {exc}")
 
 
 @router.get("/api/sessions/{session_id}/cryosparc/jobs")

@@ -34,10 +34,12 @@ from llm_client import (
 from session_store import RecursiveLimitError, SessionNotFoundError, SessionStore
 from startup_cli import (
     WORKSPACE_TITLE,
+    EXISTING_PROJECT,
     bind_manifest_scope,
     build_developer_instruction,
     build_user_prompt,
     collect_cryosparc_credentials,
+    collect_continuation_manifest,
     collect_session_manifest,
     prompt_required,
 )
@@ -2782,6 +2784,16 @@ def ensure_session_scope(csw, store, session_id):
             raise RuntimeError(
                 f"Saved CryoSPARC project {session.project_uid} is unavailable; no replacement was created."
             ) from exc
+    elif manifest["dataset"]["kind"] == EXISTING_PROJECT:
+        project_uid = manifest["project"]["project_uid"]
+        try:
+            csw.use_project(project_uid)
+        except Exception as exc:
+            raise RuntimeError(
+                f"CryoSPARC project {project_uid} was not found, or this account cannot open it."
+            ) from exc
+        store.update_scope(session_id, project_uid=project_uid)
+        session = store.get_session(session_id)
     else:
         project = unique_tagged_controller(csw.cs.find_projects(), marker, "project")
         if project is None:
@@ -2826,6 +2838,54 @@ def ensure_session_scope(csw, store, session_id):
     )
     python_globals["session_context"] = copy.deepcopy(bound_manifest)
     return bound_manifest
+
+
+def message_text(payload):
+    """The text of an assistant message item."""
+    if not isinstance(payload, dict) or payload.get("role") != "assistant":
+        return ""
+    content = payload.get("content")
+    if isinstance(content, str):
+        return content
+    return "".join(part.get("text", "") for part in content or [] if isinstance(part, dict))
+
+
+def earlier_session_notes(store, manifest, session_id, limit=2):
+    """Notes from the newest earlier sessions in the project a session continues.
+
+    Each is its last context summary and its last message, for the first
+    prompt; see startup_cli.build_user_prompt.
+    """
+
+    if manifest["dataset"]["kind"] != EXISTING_PROJECT:
+        return []
+    notes = []
+    for session in store.sessions_in_project(manifest["project"]["project_uid"]):
+        if session.id == session_id:
+            continue
+        items = store.list_conversation_items(session.id)
+        by_id = {item.id: item for item in items}
+        compactions = store.list_compactions(session.id)
+        summary = ""
+        if compactions and compactions[-1].summary_item_id in by_id:
+            payload = by_id[compactions[-1].summary_item_id].payload
+            summary = str(payload.get("content") if isinstance(payload, dict) else payload or "")
+            summary = summary.replace(COMPACTION_SUMMARY_PREFIX, "", 1).strip()
+        last_message = next((text for text in (message_text(item.payload) for item in reversed(items)) if text.strip()), "")
+        notes.append(
+            {
+                "id": session.id,
+                "model": session.model,
+                "status": session.status,
+                "updated_at": session.updated_at,
+                "last_error": session.last_error,
+                "summary": summary,
+                "last_message": last_message,
+            }
+        )
+        if len(notes) == limit:
+            break
+    return notes
 
 
 def append_resume_messages(messages):
@@ -2995,6 +3055,14 @@ def build_parser():
     )
     parser.add_argument("--resume", metavar="SESSION_ID", help="Resume a persisted session by ID.")
     parser.add_argument(
+        "--from-project",
+        metavar="PROJECT_UID",
+        help=(
+            "Start a new session that continues an existing CryoSPARC project (for example P12), "
+            "in a new workspace of its own, instead of importing a dataset."
+        ),
+    )
+    parser.add_argument(
         "--session-db",
         default=os.environ.get("CRYOPILOT_SESSION_DB"),
         help="SQLite session database path (default: ~/.cryopilot/sessions.sqlite3).",
@@ -3064,7 +3132,8 @@ def main(argv=None):
     try:
         if args.resume:
             if (
-                args.ollama
+                args.from_project
+                or args.ollama
                 or args.model
                 or args.reasoning_effort
                 or args.cryosparc_url
@@ -3074,8 +3143,8 @@ def main(argv=None):
                 or args.rlm_max_model_turns is not None
             ):
                 raise ValueError(
-                    "--resume restores provider, model, reasoning, recursion limits, "
-                    "and CryoSPARC connection settings; do not override them."
+                    "--resume restores the project, provider, model, reasoning, recursion "
+                    "limits, and CryoSPARC connection settings; do not override them."
                 )
             snapshot = store.load_snapshot(args.resume)
             session = snapshot.session
@@ -3127,7 +3196,7 @@ def main(argv=None):
                 run_agent(resume=True)
             else:
                 developer = f"{INSTRUCTIONS}\n\n{build_developer_instruction(manifest)}"
-                prompt = build_user_prompt(manifest)
+                prompt = build_user_prompt(manifest, earlier_session_notes(store, manifest, session_id))
                 store.set_status(session_id, "running")
                 run_agent(prompt, developer_instructions=developer)
         else:
@@ -3170,7 +3239,19 @@ def main(argv=None):
                 password=credentials["password"],
             )
             print("Connected to CryoSPARC.")
-            manifest = collect_session_manifest()
+            if args.from_project:
+                project_uid = args.from_project.strip().upper()
+                try:
+                    project = csw.cs.find_project(project_uid)
+                except Exception as exc:
+                    raise ValueError(
+                        f"CryoSPARC project {project_uid} was not found, or this account cannot open it."
+                    ) from exc
+                title = str(getattr(project.model, "title", "") or project_uid)
+                print(f"Continuing project {project_uid} ({title}) in a new workspace.")
+                manifest = collect_continuation_manifest(project_uid, title)
+            else:
+                manifest = collect_session_manifest()
             session_id = store.create_session(
                 provider=provider,
                 model=model,
@@ -3188,7 +3269,7 @@ def main(argv=None):
             print_session_resume(session_id, store=store, saved=False)
             manifest = ensure_session_scope(csw, store, session_id)
             developer = f"{INSTRUCTIONS}\n\n{build_developer_instruction(manifest)}"
-            prompt = build_user_prompt(manifest)
+            prompt = build_user_prompt(manifest, earlier_session_notes(store, manifest, session_id))
             store.set_status(session_id, "running")
             run_agent(prompt, developer_instructions=developer)
 

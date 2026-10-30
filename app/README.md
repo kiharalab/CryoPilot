@@ -90,6 +90,16 @@ screen. The server passes the choice to the agent as `CRYOEM_GUIDE`, the variabl
 A session keeps its guide when it is resumed; a session imported from the terminal resumes with the
 general guide, the harness default, unless the import names another.
 
+### Continuing a project
+
+In the new-reconstruction screen, **Existing project** starts a session that continues a CryoSPARC
+project you or an earlier session started, for example after a failed run. Choose the project from
+your CryoSPARC projects (`GET /api/cryosparc/projects`) or type its UID. The agent imports nothing:
+it works in a new workspace in that project, surveys the jobs already there, and then continues from
+them. It cannot queue, change or delete jobs outside its own workspace. Earlier sessions for the
+project in the harness session database pass their last notes to it. This is the same as
+`harness.py --from-project` in the terminal. The **Maps** tab shows the new workspace's jobs only.
+
 ## Maps from CryoSPARC
 
 The **Maps** tab lists the jobs of a reconstruction session's CryoSPARC workspace with their maps and

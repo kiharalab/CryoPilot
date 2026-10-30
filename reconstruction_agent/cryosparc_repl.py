@@ -1406,7 +1406,29 @@ class CryoSPARCWorkflow:
             desc=desc,
         )
 
+    def _require_own_job(self, job, action):
+        """Refuses to change a job outside the selected workspace.
+
+        A session may read every job in its project and use their outputs as
+        inputs, but it changes only the jobs in its own workspace, so work that
+        people or earlier sessions did elsewhere in the project stays as it is.
+        """
+        if self.workspace is None:
+            return
+        workspace_uids = getattr(getattr(job, "model", None), "workspace_uids", None)
+        if workspace_uids is None:
+            return
+        workspace_uid = self.workspace.model.uid
+        if workspace_uid not in workspace_uids:
+            raise PermissionError(
+                f"Cannot {action} {job.model.uid}: it is in workspace "
+                f"{', '.join(workspace_uids) or 'none'}, not this session's workspace "
+                f"{workspace_uid}. Read it and use its outputs as inputs to a new job in "
+                f"{workspace_uid} instead."
+            )
+
     def queue(self, job, lane=None, hostname=None, gpus=None, cluster_vars=None, wait=False, timeout=None):
+        self._require_own_job(job, "queue")
         job.queue(
             lane=lane,
             hostname=hostname,
@@ -1469,6 +1491,7 @@ class CryoSPARCWorkflow:
     ):
         job.refresh()
         if job.model.status == "building":
+            self._require_own_job(job, "queue")
             job.queue(
                 lane=lane,
                 hostname=hostname,
@@ -1536,10 +1559,12 @@ class CryoSPARCWorkflow:
         return job_summary(job)
 
     def clear(self, job):
+        self._require_own_job(job, "clear")
         job.clear()
         return {"uid": job.model.uid, "cleared": True}
 
     def kill(self, job):
+        self._require_own_job(job, "kill")
         job.kill()
         return {"uid": job.model.uid, "killed": True}
 
@@ -1547,10 +1572,12 @@ class CryoSPARCWorkflow:
         if not self.project:
             raise ValueError("Select a project first with use_project('P1').")
         job_uid = _uid(job_or_uid)
+        self._require_own_job(self.find_job(job_uid), "delete")
         self.cs.api.jobs.delete(self.project.model.uid, job_uid)
         return {"uid": job_uid, "deleted": True}
 
     def connect(self, target_job, target_input, source_job, source_output):
+        self._require_own_job(target_job, "connect inputs to")
         return target_job.connect(target_input, _uid(source_job), source_output)
 
     def _wrapper_job_type(self, wrapper_name):
@@ -3190,6 +3217,9 @@ Generic job discovery and control
 - `csw.delete(job_or_uid)`: delete a job from the current project.
 - `csw.connect(target_job, target_input, source_job, source_output)`: connect an
   output from one job into an input on another existing job.
+- `queue`, `queue_and_wait`, `clear`, `kill`, `delete`, and the target of `connect`
+  change only jobs in the selected workspace and raise `PermissionError` for a
+  job elsewhere. Every job in the project can still be read and used as input.
 
 Assets, plots, and 2D class visual inspection
 - `csw.export_png_assets(job_or_uid, out_dir="cryosparc_png_assets",

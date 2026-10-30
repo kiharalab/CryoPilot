@@ -50,7 +50,7 @@ if config.APP_HOME == Path("~/.cryopilot/app").expanduser():
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.server import attachments, auth, cryosparc_bridge, cryosparc_jobs, files as file_roots, volumes  # noqa: E402
+from app.server import attachments, auth, cryosparc_bridge, cryosparc_jobs, files as file_roots, routes_cryosparc, volumes  # noqa: E402
 from app.server.main import app  # noqa: E402
 from app.server.state import store  # noqa: E402
 
@@ -235,6 +235,34 @@ def env(tmp_path, monkeypatch):
         workspace=sandbox / "workspaces" / project["slug"],
         client=TestClient(app),
     )
+
+
+def test_cryosparc_projects_need_a_sign_in(env, monkeypatch):
+    def signed_out():
+        raise routes_cryosparc.api_error(400, "Sign in to CryoSPARC in Settings first.", setup="cryosparc")
+
+    monkeypatch.setattr(routes_cryosparc, "cryosparc_credentials", signed_out)
+    response = get(env, "/api/cryosparc/projects")
+    assert response.status_code == 400
+    assert response.json()["setup"] == "cryosparc"
+
+
+def test_cryosparc_projects_are_listed_newest_first(env, monkeypatch):
+    def project(uid, title):
+        created = datetime(2026, 10, int(uid[1:]) % 28 + 1, tzinfo=timezone.utc)
+        return SimpleNamespace(model=SimpleNamespace(uid=uid, title=title, created_at=created))
+
+    client = SimpleNamespace(find_projects=lambda: [project("P9", "Older"), project("P65", "Apoferritin 10146"), project("P12", "Env")])
+    monkeypatch.setattr(routes_cryosparc, "cryosparc_credentials", lambda: CREDENTIALS)
+    monkeypatch.setattr(cryosparc_bridge, "_client", lambda url, email, password: client)
+
+    response = get(env, "/api/cryosparc/projects")
+
+    assert response.status_code == 200, response.text
+    projects = response.json()["projects"]
+    assert [entry["uid"] for entry in projects] == ["P65", "P12", "P9"]
+    assert projects[0]["title"] == "Apoferritin 10146"
+    assert projects[0]["created_at"].startswith("2026-10-")
 
 
 def sign_in(monkeypatch, client: FakeClient) -> None:

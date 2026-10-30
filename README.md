@@ -268,12 +268,16 @@ From source, use `python app/serve.py start --lan` and so on. The connection is 
 ```bash
 python reconstruction_agent/harness.py                          # start a new session; prompts for the dataset
 python reconstruction_agent/harness.py --resume SESSION_ID      # resume a stopped session
+python reconstruction_agent/harness.py --from-project P12       # continue an existing CryoSPARC project
 ```
 
-The prompts ask for your CryoSPARC login, a project title and parent directory, the dataset kind (`movies`, `micrographs`, or `particles`), server-visible paths, pixel size, accelerating voltage, spherical aberration, total exposure dose, an optional gain reference and defect file, an optional sample description, the expected particle diameter, an optional molecular mass, and a scientific objective in your own words. Useful options:
+The prompts ask for your CryoSPARC login, a project title and parent directory, the dataset kind (`movies`, `micrographs`, or `particles`), server-visible paths, pixel size, accelerating voltage, spherical aberration, total exposure dose, an optional gain reference and defect file, an optional sample description, the expected particle diameter, an optional molecular mass, and a scientific objective in your own words.
+
+With `--from-project`, the session continues a CryoSPARC project that you or an earlier session started, for example after a failed run or after processing by hand. It asks only for the sample and the objective. The agent works in a new workspace of its own in that project: it first surveys every job in the project, then continues from the best results there, and it cannot queue, change or delete jobs in other workspaces. When the session database holds earlier sessions for the project, the agent also reads their last notes. Useful options:
 
 | Option | Default | Effect |
 | --- | --- | --- |
+| `--from-project PROJECT_UID` | none | Continue an existing CryoSPARC project in a new workspace instead of importing a dataset. |
 | `--processing-guide original\|experimental\|PATH` | `original` | Processing guide the agent searches: `original` is the general guide, `experimental` the self-evolution summary. |
 | `--model` | `gpt-5.5` | Model for a new session (also `OPENAI_MODEL`). A Claude model such as `claude-sonnet-5-5` runs on the Anthropic API and needs `ANTHROPIC_API_KEY`. |
 | `--reasoning-effort` | `xhigh` | Reasoning setting for a new session (also `REASONING_EFFORT`). For Claude models it sets the effort level; `none` and `minimal` become `low`. |

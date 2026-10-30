@@ -114,7 +114,7 @@ export function OutboxMessage({ text, attachments }) {
 }
 
 // --------------------------------------------------------------- dataset
-const DATASET_KINDS = { movies: 'Movies', micrographs: 'Micrographs', particles: 'Particles' }
+const DATASET_KINDS = { movies: 'Movies', micrographs: 'Micrographs', particles: 'Particles', existing_project: 'Existing CryoSPARC project' }
 
 function number(value) {
   if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return ''

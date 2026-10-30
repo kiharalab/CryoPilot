@@ -127,6 +127,7 @@ export const api = {
   console: (id, after = 0) => request(`/api/sessions/${enc(id)}/console?after=${after}`),
   eventsUrl: (id, after = 0) => `/api/sessions/${enc(id)}/events?after=${after}`,
   harnessSessions: () => request('/api/harness/sessions'),
+  cryosparcProjects: () => request('/api/cryosparc/projects'), // {projects:[{uid,title,created_at}]}, newest first
 
   // ------------------------------------------------- CryoSPARC jobs and maps
   // {project_uid, workspace_uid, project_dir, project_dir_readable, source:'api'|'filesystem',

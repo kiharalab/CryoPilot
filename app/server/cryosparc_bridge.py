@@ -115,6 +115,26 @@ def test_connection(url: str, email: str, password: str) -> dict[str, Any]:
     return {"ok": True, "project_count": len(projects)}
 
 
+def list_projects(credentials: Credentials) -> list[dict[str, Any]]:
+    """The account's projects, newest first, as ``{uid, title, created_at}``."""
+
+    def action(client: Any) -> list[dict[str, Any]]:
+        projects = []
+        for project in client.find_projects():
+            model = project.model
+            created = getattr(model, "created_at", None)
+            projects.append(
+                {
+                    "uid": str(model.uid),
+                    "title": str(getattr(model, "title", "") or ""),
+                    "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
+                }
+            )
+        return sorted(projects, key=lambda project: int(project["uid"][1:]) if project["uid"][1:].isdigit() else 0, reverse=True)
+
+    return _call(credentials, action)
+
+
 def project_directory(credentials: Credentials, project_uid: str) -> str:
     return _call(credentials, lambda client: str(client.find_project(project_uid).dir))
 

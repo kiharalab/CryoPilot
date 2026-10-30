@@ -7,6 +7,7 @@ would have produced from the terminal questionnaire.
 from __future__ import annotations
 
 import math
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,16 @@ if str(RECONSTRUCTION_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(RECONSTRUCTION_AGENT_ROOT))
 
 from llm_client import PROVIDERS, provider_for_model  # noqa: E402
-from startup_cli import DATASET_KINDS, MANIFEST_SCHEMA_VERSION, WORKSPACE_TITLE  # noqa: E402
+from startup_cli import (  # noqa: E402
+    DATASET_KINDS,
+    EXISTING_PROJECT,
+    MANIFEST_SCHEMA_VERSION,
+    WORKSPACE_TITLE,
+    continuation_manifest,
+)
+
+# CryoSPARC project UIDs: P followed by a number.
+PROJECT_UID = re.compile(r"P\d+")
 
 
 class ManifestError(ValueError):
@@ -88,7 +98,35 @@ def _bool(value: Any) -> bool:
     return _text(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def build_continuation_manifest(form: dict[str, Any]) -> dict[str, Any]:
+    """The manifest of a session that continues an existing CryoSPARC project."""
+
+    errors: dict[str, str] = {}
+    project_uid = _text(form.get("existing_project_uid")).strip().upper()
+    if not project_uid:
+        errors["existing_project_uid"] = "Choose a CryoSPARC project"
+    elif not PROJECT_UID.fullmatch(project_uid):
+        errors["existing_project_uid"] = "Enter a project UID such as P12"
+    project_title = _text(form.get("existing_project_title")).strip() or project_uid
+    particle_diameter = _float(form, "particle_diameter_A", errors, optional=True)
+    molecular_mass = _float(form, "molecular_mass_kDa", errors, optional=True)
+    user_goal = _required_text(form, "user_goal", errors)
+    if errors:
+        raise ManifestError(errors)
+    return continuation_manifest(
+        project_uid=project_uid,
+        project_title=project_title,
+        user_goal=user_goal,
+        sample_description=_text(form.get("sample_description")).strip(),
+        particle_diameter_A=particle_diameter,
+        molecular_mass_kDa=molecular_mass,
+        expected_symmetry=_text(form.get("expected_symmetry")).strip() or "C1",
+    )
+
+
 def build_manifest(form: dict[str, Any]) -> dict[str, Any]:
+    if _text(form.get("dataset_kind")).strip().lower() == EXISTING_PROJECT:
+        return build_continuation_manifest(form)
     errors: dict[str, str] = {}
 
     project_title = _required_text(form, "project_title", errors)

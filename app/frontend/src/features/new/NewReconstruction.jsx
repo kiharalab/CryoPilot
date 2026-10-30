@@ -1,6 +1,7 @@
 // New reconstruction: the dataset card (the same manifest the terminal
 // questionnaire collects) above the goal composer. Enter in the composer
-// checks the card, creates the session, and opens it.
+// checks the card, creates the session, and opens it. A session can also
+// continue a CryoSPARC project that people or earlier sessions started.
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { FolderOpen, History } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -10,6 +11,7 @@ import { useApp } from '../../store/app'
 import { Composer } from '../../components/Composer'
 import { Button, Field, InlineError, Input, Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger, Segmented, Switch } from '../../components/ui'
 import { PathInput } from './PathInput'
+import { ProjectPicker, findProject, useCryosparcProjects } from './ProjectPicker'
 import { GuideChip, ModelChip, RECONSTRUCTION_EFFORTS } from './AgentChips'
 import { SetupNotice, setupMessage } from './SetupNotice'
 import { modelService } from '../setup/services'
@@ -17,6 +19,10 @@ import { modelService } from '../setup/services'
 const FORM_KEY = 'cryopilot-reconstruction-form'
 
 const DEFAULT_FORM = {
+  // 'data' imports a dataset into a new CryoSPARC project; 'project' continues an existing one.
+  start_from: 'data',
+  existing_project_uid: '',
+  existing_project_title: '',
   dataset_kind: 'movies',
   dataset_path: '',
   particle_metadata_path: '',
@@ -39,6 +45,7 @@ const DEFAULT_FORM = {
 
 // Order of the controls on the page, for focusing the first invalid one.
 const FIELD_ORDER = [
+  'existing_project_uid',
   'dataset_kind',
   'dataset_path',
   'particle_metadata_path',
@@ -56,6 +63,11 @@ const FIELD_ORDER = [
   'expected_symmetry',
   'project_title',
   'parent_directory',
+]
+
+const START_FROM = [
+  { value: 'data', label: 'New data' },
+  { value: 'project', label: 'Existing project' },
 ]
 
 const DATASET_KINDS = [
@@ -80,6 +92,7 @@ function normalizeForm(values) {
     else form[key] = value === undefined || value === null || value === '' ? fallback : String(value)
   }
   if (!DATASET_KINDS.some((kind) => kind.value === form.dataset_kind)) form.dataset_kind = DEFAULT_FORM.dataset_kind
+  if (!START_FROM.some((option) => option.value === form.start_from)) form.start_from = DEFAULT_FORM.start_from
   return form
 }
 
@@ -156,6 +169,13 @@ function validate(form, { title, parent }) {
     if (!/^\d+$/.test(text(key)) || Number(text(key)) <= 0) errors[key] = 'Enter a positive integer'
   }
 
+  if (form.start_from === 'project') {
+    if (!text('existing_project_uid')) errors.existing_project_uid = 'Choose a CryoSPARC project'
+    else if (!/^P\d+$/i.test(text('existing_project_uid'))) errors.existing_project_uid = 'Enter a project UID such as P12'
+    number('particle_diameter_A', { optional: true })
+    number('molecular_mass_kDa', { optional: true })
+    return errors
+  }
   required('dataset_path')
   if (form.dataset_kind === 'particles') required('particle_metadata_path')
   if (form.dataset_kind === 'movies' && form.eer_enabled) {
@@ -174,9 +194,21 @@ function validate(form, { title, parent }) {
 }
 
 function buildManifest(form, { title, parent, goal }) {
+  const trim = (key) => String(form[key] ?? '').trim()
+  if (form.start_from === 'project') {
+    return {
+      dataset_kind: 'existing_project',
+      existing_project_uid: trim('existing_project_uid').toUpperCase(),
+      existing_project_title: trim('existing_project_title'),
+      sample_description: trim('sample_description'),
+      particle_diameter_A: trim('particle_diameter_A') || null,
+      molecular_mass_kDa: trim('molecular_mass_kDa') || null,
+      expected_symmetry: trim('expected_symmetry') || 'C1',
+      user_goal: goal.trim(),
+    }
+  }
   const movies = form.dataset_kind === 'movies'
   const particles = form.dataset_kind === 'particles'
-  const trim = (key) => String(form[key] ?? '').trim()
   return {
     project_title: title.trim(),
     parent_directory: parent.trim(),
@@ -202,6 +234,16 @@ function buildManifest(form, { title, parent, goal }) {
   }
 }
 
+/** Under the project field: the chosen project's title, or why there is no list to choose from. */
+function projectHint(uid, { projects, error }, signedIn) {
+  if (!signedIn) return 'Sign in to CryoSPARC in Settings to choose from your projects.'
+  if (projects === null) return 'Loading your CryoSPARC projects…'
+  if (error) return `Could not list your projects (${error}). Type the project UID.`
+  const project = findProject(projects, uid)
+  if (project) return project.title || project.uid
+  return String(uid || '').trim() ? 'Not one of your projects, or not loaded yet.' : 'Choose a project, or type its UID.'
+}
+
 function prefersReducedMotion() {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
@@ -217,7 +259,7 @@ export function NewReconstruction() {
   const previous = useMemo(
     () =>
       (project?.sessions || [])
-        .filter((session) => session.kind === 'reconstruction' && session.config?.manifest?.dataset)
+        .filter((session) => session.kind === 'reconstruction' && session.config?.manifest?.dataset?.path)
         .sort((a, b) => (toDate(b.created_at)?.getTime() ?? 0) - (toDate(a.created_at)?.getTime() ?? 0)),
     [project?.sessions],
   )
@@ -255,6 +297,8 @@ export function NewReconstruction() {
 
   const platformReady = Boolean(setup?.platform?.reconstruction_supported)
   const cryosparcReady = Boolean(setup?.cryosparc?.email && setup?.cryosparc?.password_set)
+  const continuing = form.start_from === 'project'
+  const cryosparcProjects = useCryosparcProjects(continuing && cryosparcReady)
   // The chosen model's API key: Claude models run on Anthropic.
   const keyService = modelService(model)
   const keyReady = Boolean(setup?.[keyService]?.configured)
@@ -310,7 +354,7 @@ export function NewReconstruction() {
     setSubmitError(null)
     const parentDirectory = parent.trim()
     try {
-      if (parentDirectory !== (project.parent_directory || '')) {
+      if (!continuing && parentDirectory !== (project.parent_directory || '')) {
         await api.updateProject(project.id, { parent_directory: parentDirectory })
         refreshProject().catch(() => {})
       }
@@ -352,9 +396,17 @@ export function NewReconstruction() {
           <div>
             <h1 className="text-xl font-semibold tracking-[-0.015em] text-fg">Start a reconstruction</h1>
             <p className="mt-1 max-w-[620px] text-sm text-muted">
-              The reconstruction agent creates a CryoSPARC project for this dataset and runs one job at a time toward your goal. It reports back when it
-              is done or needs you.
+              {continuing
+                ? 'The reconstruction agent continues a CryoSPARC project that you or an earlier session started. It surveys the jobs already there, then runs one job at a time toward your goal in a new workspace. It reports back when it is done or needs you.'
+                : 'The reconstruction agent creates a CryoSPARC project for this dataset and runs one job at a time toward your goal. It reports back when it is done or needs you.'}
             </p>
+            <Segmented
+              ariaLabel="Start from"
+              value={form.start_from}
+              onChange={(value) => update('start_from', value)}
+              options={START_FROM}
+              className="mt-4"
+            />
           </div>
 
           {!platformReady ? (
@@ -364,97 +416,124 @@ export function NewReconstruction() {
           ) : null}
 
           <div className="rounded-xl border border-line bg-elevated">
-            <Section
-              title="Dataset"
-              action={
-                previous.length ? (
-                  <Menu>
-                    <MenuTrigger asChild>
-                      <Button size="xs" variant="ghost" icon={History}>
-                        Reuse a previous dataset
-                      </Button>
-                    </MenuTrigger>
-                    <MenuContent align="end" className="w-[300px]">
-                      <MenuLabel>Fill the card from</MenuLabel>
-                      <div className="max-h-[280px] overflow-y-auto">
-                        {previous.slice(0, 30).map((session) => (
-                          <MenuItem key={session.id} hint={formatRelative(session.created_at)} onSelect={() => fillFrom(session)}>
-                            {session.title}
-                          </MenuItem>
-                        ))}
-                      </div>
-                    </MenuContent>
-                  </Menu>
-                ) : null
-              }
-            >
-              <div className="flex flex-col gap-4">
-                <Segmented
-                  ariaLabel="Data type"
-                  value={kind}
-                  onChange={(value) => update('dataset_kind', value)}
-                  options={DATASET_KINDS}
-                  className="self-start"
-                />
-                <Field label={copy.label} error={errors.dataset_path} hint="A folder or a glob on the CryoSPARC computer">
-                  {({ id }) => <PathInput id={id} placeholder={copy.placeholder} {...bind('dataset_path')} />}
-                </Field>
-                {kind === 'particles' ? (
-                  <Field label="Particle metadata" error={errors.particle_metadata_path} hint="The RELION .star file that describes the stacks">
-                    {({ id }) => <PathInput id={id} placeholder="/data/relion/Extract/job012/particles.star" {...bind('particle_metadata_path')} />}
-                  </Field>
-                ) : null}
-                {kind === 'movies' ? (
-                  <>
-                    <div className="grid grid-cols-1 gap-4 @lg:grid-cols-2">
-                      <Field label="Gain reference" optional error={errors.gain_reference_path}>
-                        {({ id }) => <PathInput id={id} placeholder="/data/krios/gain.mrc" {...bind('gain_reference_path')} />}
-                      </Field>
-                      <Field label="Defect file" optional error={errors.defect_file_path}>
-                        {({ id }) => <PathInput id={id} placeholder="/data/krios/defects.txt" {...bind('defect_file_path')} />}
-                      </Field>
-                    </div>
-                    <SwitchField
-                      label="EER movies"
-                      description="Falcon 4 electron-event representation"
-                      checked={form.eer_enabled}
-                      onCheckedChange={(checked) => update('eer_enabled', checked)}
+            {continuing ? (
+              <Section title="CryoSPARC project">
+                <Field
+                  label="Project"
+                  error={errors.existing_project_uid}
+                  hint={projectHint(form.existing_project_uid, cryosparcProjects, cryosparcReady)}
+                >
+                  {({ id }) => (
+                    <ProjectPicker
+                      id={id}
+                      value={form.existing_project_uid}
+                      projects={cryosparcProjects.projects}
+                      invalid={Boolean(errors.existing_project_uid)}
+                      data-field="existing_project_uid"
+                      onChange={(uid, projectTitle) => {
+                        setForm((current) => ({ ...current, existing_project_uid: uid, existing_project_title: projectTitle }))
+                        setErrors((current) => ({ ...current, existing_project_uid: undefined }))
+                      }}
                     />
-                    {form.eer_enabled ? (
-                      <div className="grid grid-cols-2 gap-4">
-                        <Field label="EER fractions" error={errors.eer_fractions}>
-                          {({ id }) => <Input id={id} inputMode="numeric" autoComplete="off" placeholder="40" {...bind('eer_fractions')} />}
-                        </Field>
-                        <Field label="EER upsampling" error={errors.eer_upsampling}>
-                          {({ id }) => <Input id={id} inputMode="numeric" autoComplete="off" placeholder="2" {...bind('eer_upsampling')} />}
-                        </Field>
-                      </div>
+                  )}
+                </Field>
+              </Section>
+            ) : null}
+            {continuing ? null : (
+              <>
+                <Section
+                  title="Dataset"
+                  action={
+                    previous.length ? (
+                      <Menu>
+                        <MenuTrigger asChild>
+                          <Button size="xs" variant="ghost" icon={History}>
+                            Reuse a previous dataset
+                          </Button>
+                        </MenuTrigger>
+                        <MenuContent align="end" className="w-[300px]">
+                          <MenuLabel>Fill the card from</MenuLabel>
+                          <div className="max-h-[280px] overflow-y-auto">
+                            {previous.slice(0, 30).map((session) => (
+                              <MenuItem key={session.id} hint={formatRelative(session.created_at)} onSelect={() => fillFrom(session)}>
+                                {session.title}
+                              </MenuItem>
+                            ))}
+                          </div>
+                        </MenuContent>
+                      </Menu>
+                    ) : null
+                  }
+                >
+                  <div className="flex flex-col gap-4">
+                    <Segmented
+                      ariaLabel="Data type"
+                      value={kind}
+                      onChange={(value) => update('dataset_kind', value)}
+                      options={DATASET_KINDS}
+                      className="self-start"
+                    />
+                    <Field label={copy.label} error={errors.dataset_path} hint="A folder or a glob on the CryoSPARC computer">
+                      {({ id }) => <PathInput id={id} placeholder={copy.placeholder} {...bind('dataset_path')} />}
+                    </Field>
+                    {kind === 'particles' ? (
+                      <Field label="Particle metadata" error={errors.particle_metadata_path} hint="The RELION .star file that describes the stacks">
+                        {({ id }) => <PathInput id={id} placeholder="/data/relion/Extract/job012/particles.star" {...bind('particle_metadata_path')} />}
+                      </Field>
                     ) : null}
-                  </>
-                ) : null}
-              </div>
-            </Section>
+                    {kind === 'movies' ? (
+                      <>
+                        <div className="grid grid-cols-1 gap-4 @lg:grid-cols-2">
+                          <Field label="Gain reference" optional error={errors.gain_reference_path}>
+                            {({ id }) => <PathInput id={id} placeholder="/data/krios/gain.mrc" {...bind('gain_reference_path')} />}
+                          </Field>
+                          <Field label="Defect file" optional error={errors.defect_file_path}>
+                            {({ id }) => <PathInput id={id} placeholder="/data/krios/defects.txt" {...bind('defect_file_path')} />}
+                          </Field>
+                        </div>
+                        <SwitchField
+                          label="EER movies"
+                          description="Falcon 4 electron-event representation"
+                          checked={form.eer_enabled}
+                          onCheckedChange={(checked) => update('eer_enabled', checked)}
+                        />
+                        {form.eer_enabled ? (
+                          <div className="grid grid-cols-2 gap-4">
+                            <Field label="EER fractions" error={errors.eer_fractions}>
+                              {({ id }) => <Input id={id} inputMode="numeric" autoComplete="off" placeholder="40" {...bind('eer_fractions')} />}
+                            </Field>
+                            <Field label="EER upsampling" error={errors.eer_upsampling}>
+                              {({ id }) => <Input id={id} inputMode="numeric" autoComplete="off" placeholder="2" {...bind('eer_upsampling')} />}
+                            </Field>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                </Section>
 
-            <Section title="Microscope">
-              <div className="grid grid-cols-2 gap-4 @xl:grid-cols-4">
-                <Field label="Pixel size" error={errors.pixel_size_A}>
-                  {({ id }) => <UnitInput id={id} unit="Å" placeholder="0.83" {...bind('pixel_size_A')} />}
-                </Field>
-                <Field label="Voltage" error={errors.accelerating_voltage_kV}>
-                  {({ id }) => <UnitInput id={id} unit="kV" placeholder="300" {...bind('accelerating_voltage_kV')} />}
-                </Field>
-                <Field label="Spherical aberration" error={errors.spherical_aberration_mm}>
-                  {({ id }) => <UnitInput id={id} unit="mm" placeholder="2.7" {...bind('spherical_aberration_mm')} />}
-                </Field>
-                <Field label="Total dose" error={errors.total_dose_e_per_A2}>
-                  {({ id }) => <UnitInput id={id} unit="e⁻/Å²" placeholder="50" {...bind('total_dose_e_per_A2')} />}
-                </Field>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-x-8 gap-y-3">
-                <SwitchField label="Negative stain" checked={form.negative_stain} onCheckedChange={(checked) => update('negative_stain', checked)} />
-                <SwitchField label="Phase plate" checked={form.phase_plate} onCheckedChange={(checked) => update('phase_plate', checked)} />
-              </div>
-            </Section>
+                <Section title="Microscope">
+                  <div className="grid grid-cols-2 gap-4 @xl:grid-cols-4">
+                    <Field label="Pixel size" error={errors.pixel_size_A}>
+                      {({ id }) => <UnitInput id={id} unit="Å" placeholder="0.83" {...bind('pixel_size_A')} />}
+                    </Field>
+                    <Field label="Voltage" error={errors.accelerating_voltage_kV}>
+                      {({ id }) => <UnitInput id={id} unit="kV" placeholder="300" {...bind('accelerating_voltage_kV')} />}
+                    </Field>
+                    <Field label="Spherical aberration" error={errors.spherical_aberration_mm}>
+                      {({ id }) => <UnitInput id={id} unit="mm" placeholder="2.7" {...bind('spherical_aberration_mm')} />}
+                    </Field>
+                    <Field label="Total dose" error={errors.total_dose_e_per_A2}>
+                      {({ id }) => <UnitInput id={id} unit="e⁻/Å²" placeholder="50" {...bind('total_dose_e_per_A2')} />}
+                    </Field>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-x-8 gap-y-3">
+                    <SwitchField label="Negative stain" checked={form.negative_stain} onCheckedChange={(checked) => update('negative_stain', checked)} />
+                    <SwitchField label="Phase plate" checked={form.phase_plate} onCheckedChange={(checked) => update('phase_plate', checked)} />
+                  </div>
+                </Section>
+              </>
+            )}
 
             <Section title="Sample">
               <div className="flex flex-col gap-4">
@@ -462,7 +541,7 @@ export function NewReconstruction() {
                   {({ id }) => <Input id={id} autoComplete="off" placeholder="Human GABA-A receptor in nanodisc" {...bind('sample_description')} />}
                 </Field>
                 <div className="grid grid-cols-2 gap-4 @xl:grid-cols-3">
-                  <Field label="Particle diameter" error={errors.particle_diameter_A}>
+                  <Field label="Particle diameter" optional={continuing} error={errors.particle_diameter_A}>
                     {({ id }) => <UnitInput id={id} unit="Å" placeholder="180" {...bind('particle_diameter_A')} />}
                   </Field>
                   <Field label="Molecular mass" optional error={errors.molecular_mass_kDa}>
@@ -475,7 +554,20 @@ export function NewReconstruction() {
               </div>
             </Section>
 
-            {editingProject ? (
+            {continuing ? (
+              <div className="flex items-center gap-3 border-t border-line px-5 py-3 text-sm text-muted">
+                <FolderOpen size={15} strokeWidth={1.75} className="shrink-0 text-faint" />
+                <p className="min-w-0 flex-1">
+                  Works in a new workspace in{' '}
+                  {form.existing_project_uid.trim() ? (
+                    <span className="font-mono text-[12.5px] text-fg">{form.existing_project_uid.trim().toUpperCase()}</span>
+                  ) : (
+                    'the chosen project'
+                  )}
+                  . The jobs already there stay as they are.
+                </p>
+              </div>
+            ) : editingProject ? (
               <Section title="CryoSPARC project">
                 <div className="grid grid-cols-1 gap-4 @lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
                   <Field label="Title" error={errors.project_title}>
@@ -556,7 +648,7 @@ export function NewReconstruction() {
               onSubmit={submit}
               canSubmit={Boolean(goal.trim()) && ready}
               busy={busy}
-              placeholder="What should the reconstruction agent achieve with this dataset?"
+              placeholder={continuing ? 'What should the reconstruction agent do in this project?' : 'What should the reconstruction agent achieve with this dataset?'}
               toolbarLeft={
                 <>
                   <ModelChip

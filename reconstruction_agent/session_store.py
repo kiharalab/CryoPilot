@@ -786,6 +786,15 @@ class SessionStore:
         row = self._require_session(self.connection, session_id)
         return self._session_from_row(row)
 
+    def sessions_in_project(self, project_uid: str) -> list[SessionRecord]:
+        """Sessions bound to a CryoSPARC project, newest first."""
+
+        rows = self.connection.execute(
+            "SELECT * FROM sessions WHERE project_uid = ? ORDER BY created_at DESC",
+            (project_uid,),
+        ).fetchall()
+        return [self._session_from_row(row) for row in rows]
+
     def update_manifest(self, session_id: str, manifest: Any) -> None:
         manifest_json = _json_dump(manifest)
         with self._transaction() as connection:

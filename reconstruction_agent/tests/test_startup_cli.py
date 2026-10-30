@@ -343,6 +343,52 @@ class StartupCliTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "session ID"):
             startup_cli.build_user_prompt(manifest)
 
+    def test_a_continuation_collects_the_goal_and_never_asks_for_an_import(self):
+        fake = FakeInput(["apoferritin", "", "440", "O", "Refine the best map further"])
+        manifest = startup_cli.collect_continuation_manifest("P65", "Apoferritin 10146", input_fn=fake)
+
+        self.assertEqual(manifest["dataset"]["kind"], startup_cli.EXISTING_PROJECT)
+        self.assertEqual(manifest["project"]["project_uid"], "P65")
+        self.assertEqual(manifest["project"]["title"], "Apoferritin 10146")
+        self.assertIsNone(manifest["dataset"]["path"])
+        self.assertIsNone(manifest["acquisition"]["pixel_size_A"])
+        self.assertEqual(
+            manifest["sample"],
+            {"description": "apoferritin", "particle_diameter_A": None, "molecular_mass_kDa": 440.0, "expected_symmetry": "O"},
+        )
+        self.assertEqual(manifest["user_goal"], "Refine the best map further")
+
+        bound = startup_cli.bind_manifest_scope(manifest, session_id="s-new", project_uid="P65", workspace_uid="W4")
+        developer = startup_cli.build_developer_instruction(bound)
+        prompt = startup_cli.build_user_prompt(bound)
+        self.assertIn("continues project P65", developer)
+        self.assertIn("Workspace W4 is new", developer)
+        self.assertIn("Do not create an import job", developer)
+        self.assertIn('csw.list_jobs(project_uid="P65"', developer)
+        for text in (developer, prompt):
+            self.assertNotIn("import_movies", text)
+            self.assertNotIn("Import Movies", text)
+        self.assertIn("survey the existing jobs in every workspace of project P65", prompt)
+        self.assertNotIn("Earlier CryoPilot sessions", prompt)
+
+        earlier = {
+            "id": "a1",
+            "model": "gpt-6.1-sol",
+            "status": "error",
+            "updated_at": "2026-10-30T16:02:00+00:00",
+            "last_error": "Error code: 400 - The image you provided requires 33411 patches",
+            "summary": "x" * (startup_cli.EARLIER_SESSION_NOTE_CHARS + 500),
+            "last_message": "J23 class sheet reviewed.",
+        }
+        noted = startup_cli.build_user_prompt(bound, [earlier])
+        self.assertIn("Earlier CryoPilot sessions worked in this project", noted)
+        self.assertIn("Session a1 (gpt-6.1-sol, error;", noted)
+        self.assertIn("It stopped with this error: Error code: 400", noted)
+        self.assertIn("x" * (startup_cli.EARLIER_SESSION_NOTE_CHARS - 1) + "…", noted)
+        self.assertNotIn("x" * startup_cli.EARLIER_SESSION_NOTE_CHARS, noted)
+        self.assertIn("J23 class sheet reviewed.", noted)
+        self.assertLess(noted.index("Earlier CryoPilot"), noted.index("Session manifest"))
+
     def test_prompt_builders_reject_unsupported_dataset_kind(self):
         manifest = {
             "schema_version": 1,

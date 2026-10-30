@@ -23,7 +23,7 @@
 
 set -eu
 
-LATEST=0.2.0
+LATEST=0.3.0
 DOWNLOADS=https://kiharalab.org/CryoPilot/app
 
 say() { printf '%s\n' "$*"; }
@@ -132,9 +132,9 @@ main() {
     if [ "$questions" = 1 ]; then
         say "This installs CryoPilot $version. Press Enter to keep the answer in brackets."
         say ""
-        install_dir=$(ask_folder "Folder for the program (about 265 MB)" "$install_dir")
+        install_dir=$(ask_folder "Folder for the program (about 280 MB)" "$install_dir")
         bin_dir=$(ask_folder "Folder for the cryopilot command" "$bin_dir")
-        cache_dir=$(ask_folder "Folder that the first start unpacks into (about 730 MB)" "$cache_dir")
+        cache_dir=$(ask_folder "Folder that the first start unpacks into (about 780 MB)" "$cache_dir")
     fi
 
     case ":$PATH:" in
@@ -172,7 +172,7 @@ main() {
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT
 
-    say "Downloading CryoPilot $version ($binary, about 265 MB)..."
+    say "Downloading CryoPilot $version ($binary, about 280 MB)..."
     fetch "$url" "$work/$binary" || die "the download from $url failed."
     if command -v sha256sum >/dev/null 2>&1; then
         fetch "$url.sha256" "$work/$binary.sha256" 2>/dev/null || die "the checksum download failed."
@@ -220,7 +220,7 @@ EOF
 
     say ""
     say "Start CryoPilot with:  $command"
-    say "The first start unpacks the program (about 730 MB) into $(short "$cache_dir")/."
+    say "The first start unpacks the program (about 780 MB) into $(short "$cache_dir")/."
 }
 
 main "$@"

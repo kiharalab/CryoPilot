@@ -74,6 +74,81 @@ def png_data_url(width, height):
     return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
+class FakeOpenAI:
+    """Records each Responses request."""
+
+    def __init__(self):
+        self.calls = []
+        self.responses = SimpleNamespace(create=self.create)
+
+    def create(self, **params):
+        self.calls.append(copy.deepcopy(params))
+        return SimpleNamespace(output=[], output_text="")
+
+
+def image_url(mode, width, height):
+    buffer = io.BytesIO()
+    Image.new(mode, (width, height), 128).save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def sent_image_size(call, index=-1):
+    url = [item for item in call["input"] if isinstance(item.get("content"), list)][index]["content"][1]["image_url"]
+    with Image.open(io.BytesIO(base64.b64decode(url.split(",", 1)[1]))) as image:
+        return url, image.size
+
+
+def image_turn(url):
+    return {
+        "role": "user",
+        "content": [
+            {"type": "input_text", "text": "Image loaded from J23_class_sheet.png."},
+            {"type": "input_image", "image_url": url, "detail": "auto"},
+        ],
+    }
+
+
+class OpenAIImageTests(unittest.TestCase):
+    def test_patch_count_matches_openais_examples(self):
+        self.assertEqual(llm_client.image_patches(4096, 512), 2048)
+        self.assertEqual(llm_client.image_patches(2048, 2048), 4096)
+        self.assertEqual(llm_client.image_patches(33, 1), 2)
+
+    def test_a_class_sheet_over_the_patch_limit_is_shrunk_to_fit(self):
+        sdk = FakeOpenAI()
+        client = llm_client.OpenAIResponsesClient(sdk)
+        sheet = image_url("L", 2048, 16384)
+        self.assertGreater(llm_client.image_patches(2048, 16384), llm_client.OPENAI_IMAGE_MAX_PATCHES)
+        history = [{"role": "user", "content": "Review the classes."}, image_turn(sheet)]
+
+        client.create(model="gpt-6.1-sol", input=history)
+        client.create(model="gpt-6.1-sol", input=history + [{"role": "user", "content": "Continue."}])
+
+        first, size = sent_image_size(sdk.calls[0])
+        again, _ = sent_image_size(sdk.calls[1])
+        self.assertLessEqual(llm_client.image_patches(*size), llm_client.OPENAI_IMAGE_MAX_PATCHES)
+        self.assertGreater(llm_client.image_patches(*size), 0.95 * llm_client.OPENAI_IMAGE_MAX_PATCHES)
+        self.assertAlmostEqual(size[1] / size[0], 8, places=1)
+        self.assertEqual(first, again)
+        self.assertEqual(history[1]["content"][1]["image_url"], sheet)
+
+    def test_images_within_the_limit_are_sent_unchanged(self):
+        sdk = FakeOpenAI()
+        small = image_url("RGB", 1600, 1200)
+
+        llm_client.OpenAIResponsesClient(sdk).create(model="gpt-6.1-sol", input=[image_turn(small)])
+
+        self.assertEqual(sent_image_size(sdk.calls[0])[0], small)
+
+    def test_data_that_is_not_an_image_is_sent_unchanged(self):
+        sdk = FakeOpenAI()
+        url = "data:image/png;base64," + base64.b64encode(b"not an image").decode("ascii")
+
+        llm_client.OpenAIResponsesClient(sdk).create(model="gpt-6.1-sol", input=[image_turn(url)])
+
+        self.assertEqual(sdk.calls[0]["input"][0]["content"][1]["image_url"], url)
+
+
 class AnthropicRequestTests(unittest.TestCase):
     def test_agent_turn_request(self):
         sdk = FakeAnthropic(claude_message(block("text", text="done")))

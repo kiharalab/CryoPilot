@@ -11,7 +11,7 @@ from __future__ import annotations
 import copy
 import getpass
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -22,6 +22,12 @@ SecretInputFunction = Callable[[str], str]
 MANIFEST_SCHEMA_VERSION = 1
 WORKSPACE_TITLE = "Automated Reconstruction"
 DATASET_KINDS = ("movies", "micrographs", "particles")
+# A session that continues a CryoSPARC project someone has already started:
+# people or earlier agent sessions. It imports nothing and works in a new
+# workspace of its own.
+EXISTING_PROJECT = "existing_project"
+# Notes from each earlier session that the first prompt quotes, at most.
+EARLIER_SESSION_NOTE_CHARS = 3000
 
 _IMPORT_JOBS = {
     "movies": ("Import Movies", "csw.import_movies"),
@@ -364,6 +370,91 @@ def collect_session_manifest(
     }
 
 
+def continuation_manifest(
+    *,
+    project_uid: str,
+    project_title: str,
+    user_goal: str,
+    sample_description: str = "",
+    particle_diameter_A: float | None = None,
+    molecular_mass_kDa: float | None = None,
+    expected_symmetry: str = "C1",
+) -> dict[str, Any]:
+    """An unbound manifest for a session that continues an existing project.
+
+    The dataset and acquisition values stay empty: the agent reads them from
+    the project's own import and CTF jobs.
+    """
+
+    return {
+        "schema_version": MANIFEST_SCHEMA_VERSION,
+        "session": {"id": None},
+        "project": {
+            "title": project_title,
+            "parent_directory": None,
+            "project_uid": project_uid,
+            "workspace_title": WORKSPACE_TITLE,
+            "workspace_uid": None,
+        },
+        "dataset": {
+            "kind": EXISTING_PROJECT,
+            "path": None,
+            "particle_metadata_path": None,
+            "gain_reference_path": None,
+            "defect_file_path": None,
+            "eer": {"enabled": False, "fractions": None, "upsampling": None},
+        },
+        "acquisition": {
+            "pixel_size_A": None,
+            "accelerating_voltage_kV": None,
+            "spherical_aberration_mm": None,
+            "total_dose_e_per_A2": None,
+            "negative_stain": False,
+            "phase_plate": False,
+        },
+        "sample": {
+            "description": sample_description,
+            "particle_diameter_A": particle_diameter_A,
+            "molecular_mass_kDa": molecular_mass_kDa,
+            "expected_symmetry": expected_symmetry or "C1",
+        },
+        "user_goal": user_goal,
+    }
+
+
+def collect_continuation_manifest(
+    project_uid: str,
+    project_title: str,
+    *,
+    input_fn: InputFunction = _default_input,
+) -> dict[str, Any]:
+    """Ask for the sample and the goal of a session that continues ``project_uid``."""
+
+    sample_description = input_fn("Sample or target description (optional): ").strip()
+    particle_diameter = prompt_optional_positive_float(
+        "Expected particle diameter (A, optional): ",
+        input_fn=input_fn,
+    )
+    molecular_mass = prompt_optional_positive_float(
+        "Molecular mass (kDa, optional): ",
+        input_fn=input_fn,
+    )
+    symmetry = input_fn("Expected symmetry [C1]: ").strip() or "C1"
+    user_goal = prompt_required(
+        "Scientific objective for this session: ",
+        input_fn=input_fn,
+    )
+    return continuation_manifest(
+        project_uid=project_uid,
+        project_title=project_title,
+        user_goal=user_goal,
+        sample_description=sample_description,
+        particle_diameter_A=particle_diameter,
+        molecular_mass_kDa=molecular_mass,
+        expected_symmetry=symmetry,
+    )
+
+
 def bind_manifest_scope(
     manifest: Mapping[str, Any],
     *,
@@ -419,6 +510,35 @@ def _bound_scope(manifest: Mapping[str, Any]) -> tuple[str, str, str]:
     return session_id, project_uid, workspace_uid
 
 
+def _continues_project(manifest: Mapping[str, Any]) -> bool:
+    dataset = manifest.get("dataset")
+    return isinstance(dataset, Mapping) and dataset.get("kind") == EXISTING_PROJECT
+
+
+def _clip(text: Any, limit: int) -> str:
+    text = str(text or "").strip()
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _earlier_session_notes(sessions: Sequence[Mapping[str, Any]]) -> str:
+    if not sessions:
+        return ""
+    lines = [
+        "Earlier CryoPilot sessions worked in this project. Their notes follow, newest "
+        "first. They describe intent; check every claim against the jobs themselves."
+    ]
+    for session in sessions:
+        state = ", ".join(str(value) for value in (session.get("model"), session.get("status")) if value)
+        lines.append(f"\n- Session {session.get('id')} ({state}; last active {session.get('updated_at')})")
+        if session.get("last_error"):
+            lines.append(f"  It stopped with this error: {_clip(session['last_error'], 500)}")
+        if session.get("summary"):
+            lines.append(f"  Its last context summary:\n{_clip(session['summary'], EARLIER_SESSION_NOTE_CHARS)}")
+        if session.get("last_message"):
+            lines.append(f"  Its last message:\n{_clip(session['last_message'], EARLIER_SESSION_NOTE_CHARS)}")
+    return "\n".join(lines) + "\n\n"
+
+
 def _import_job_for_dataset(manifest: Mapping[str, Any]) -> tuple[str, str]:
     dataset = manifest.get("dataset")
     dataset_kind = dataset.get("kind") if isinstance(dataset, Mapping) else None
@@ -432,6 +552,41 @@ def build_developer_instruction(manifest: Mapping[str, Any]) -> str:
     """Build deterministic runtime instructions pinned to the bound scope."""
 
     session_id, project_uid, workspace_uid = _bound_scope(manifest)
+    if _continues_project(manifest):
+        return (
+            "You are an interactive scientific agent performing single-particle cryo-EM "
+            "reconstruction in the CryoSPARC scope below.\n"
+            f"Session ID: {session_id}\n"
+            f"CryoSPARC project UID: {project_uid}\n"
+            f"CryoSPARC workspace UID: {workspace_uid}\n"
+            f"Workspace title: {WORKSPACE_TITLE}\n\n"
+            f"This session continues project {project_uid}, which already holds work "
+            "done by people or by earlier agent sessions. Workspace "
+            f"{workspace_uid} is new and belongs to this session.\n"
+            f"You may read every job in project {project_uid}, in any workspace: find "
+            f'one with `csw.find_job(uid)`, list them with `csw.list_jobs(project_uid="{project_uid}", '
+            f'limit=200)` or `csw.audit_jobs(project_uid="{project_uid}")`, and use the '
+            "outputs of any of them as inputs with `csw.out(uid, output)`.\n"
+            f"Create, queue, connect, clear, kill, or delete jobs only in workspace "
+            f"{workspace_uid}. `csw` refuses to change a job in another workspace; never "
+            "change or delete one by other means either. Do not create, select, or "
+            "switch to another project or workspace. The connected `csw` object is "
+            "already bound to this exact scope.\n"
+            "Do not create an import job: the data is already in the project. Before "
+            "you create any job, survey the project. List every job with its type, "
+            "title, status, and workspace; inspect the key outputs (exposure and "
+            "particle counts, class averages, maps, resolutions, and masks); take the "
+            "acquisition values from the existing import and CTF jobs; and report what "
+            "exists and what you plan to do next. A job's outputs are in `job.outputs`: "
+            "for example, a refinement's FSC curves are in "
+            "`job.outputs['volume'].latest_summary_stats['fsc_info_best']`, and "
+            "`job.load_output(name)` loads an output's dataset. Then continue from the most advanced "
+            "valid results instead of repeating finished steps. Repeat a step only when "
+            "the evidence shows its result is wrong or unsuitable for the goal. Treat "
+            "`user_goal` as the scientific objective. Pursue it conservatively, creating "
+            "or processing only one or a few jobs at a time and inspecting their results "
+            "before continuing."
+        )
     import_job, import_wrapper = _import_job_for_dataset(manifest)
     particle_instruction = ""
     if manifest["dataset"]["kind"] == "particles":
@@ -464,10 +619,30 @@ def build_developer_instruction(manifest: Mapping[str, Any]) -> str:
     )
 
 
-def build_user_prompt(manifest: Mapping[str, Any]) -> str:
-    """Build the deterministic initial user prompt with canonical manifest JSON."""
+def build_user_prompt(manifest: Mapping[str, Any], earlier_sessions: Sequence[Mapping[str, Any]] = ()) -> str:
+    """Build the deterministic initial user prompt with canonical manifest JSON.
+
+    ``earlier_sessions`` (for a session that continues a project) are notes
+    from the project's earlier sessions, newest first: dicts with ``id``,
+    ``model``, ``status``, ``updated_at``, ``last_error``, ``summary``, and
+    ``last_message``.
+    """
 
     session_id, project_uid, workspace_uid = _bound_scope(manifest)
+    if _continues_project(manifest):
+        return (
+            f"Continue the cryo-EM reconstruction in CryoSPARC project {project_uid}. "
+            "The launcher has already connected this session to the project and created "
+            f"its own workspace {workspace_uid}; the data is already imported.\n\n"
+            f"First survey the existing jobs in every workspace of project {project_uid} "
+            "and report what they hold. Then work toward `user_goal`, creating new jobs "
+            f"only in workspace {workspace_uid}, session {session_id}.\n\n"
+            f"{_earlier_session_notes(earlier_sessions)}"
+            "Session manifest (canonical JSON):\n"
+            "```json\n"
+            f"{canonical_manifest_json(manifest)}\n"
+            "```"
+        )
     import_job, import_wrapper = _import_job_for_dataset(manifest)
     return (
         "Begin the requested cryo-EM reconstruction session. The launcher has already "
@@ -487,14 +662,18 @@ def build_user_prompt(manifest: Mapping[str, Any]) -> str:
 
 __all__ = [
     "DATASET_KINDS",
+    "EARLIER_SESSION_NOTE_CHARS",
+    "EXISTING_PROJECT",
     "MANIFEST_SCHEMA_VERSION",
     "WORKSPACE_TITLE",
     "bind_manifest_scope",
     "build_developer_instruction",
     "build_user_prompt",
     "canonical_manifest_json",
+    "collect_continuation_manifest",
     "collect_cryosparc_credentials",
     "collect_session_manifest",
+    "continuation_manifest",
     "prompt_choice",
     "prompt_float",
     "prompt_optional",
