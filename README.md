@@ -50,7 +50,7 @@ You can use both agents from a local web application or from the terminal.
 
 ## Hardware requirements
 
-The reconstruction agent must run on the machine where **CryoSPARC** is installed, because it reads and writes the CryoSPARC project files directly. That machine needs the NVIDIA GPUs and storage that CryoSPARC requires for the dataset. CryoPilot itself adds little load: the agents send requests to the OpenAI API, and the modeling agent runs DAQ, fitting, and refinement on the CPU.
+The reconstruction agent must run on the machine where **CryoSPARC** is installed, because it reads and writes the CryoSPARC project files directly. That machine needs the NVIDIA GPUs and storage that CryoSPARC requires for the dataset. CryoPilot itself adds little load: the agents send requests to the OpenAI or Anthropic API, and the modeling agent runs DAQ, fitting, and refinement on the CPU.
 
 The modeling agent alone runs on any standard computer with an internet connection, including a Mac. It does not need a GPU.
 
@@ -67,7 +67,8 @@ CryoPilot has been tested on:
 
 ### Accounts and services
 
-- An **OpenAI API key** (`OPENAI_API_KEY`). Both agents use GPT-5.5 by default, at the `xhigh` reasoning setting for the reconstruction agent and `high` for the modeling agent, as in the paper. You can choose any other OpenAI model (see [Instructions for use](#instructions-for-use)). Support for Anthropic models is coming soon.
+- An **OpenAI API key** (`OPENAI_API_KEY`). Both agents use GPT-5.5 by default, at the `xhigh` reasoning setting for the reconstruction agent and `high` for the modeling agent, as in the paper. You can choose any other OpenAI model (see [Instructions for use](#instructions-for-use)).
+- Optional: an **Anthropic API key** (`ANTHROPIC_API_KEY`) to run the reconstruction agent on a Claude model such as `claude-sonnet-5-5`. The modeling agent runs on OpenAI models only.
 - A **CryoSPARC v5.0.x** instance and user account, for the reconstruction agent.
 - A **CryoZeta** account on the Kihara Lab EM server (<https://em.kiharalab.org>), for model building by the modeling agent.
 
@@ -77,6 +78,8 @@ The reconstruction agent and web server use Python 3.11 (tested 3.11.9 and 3.11.
 
 ```
 openai>=2.0.0           # tested 2.43.0
+anthropic>=2.3          # tested 2.3.0
+pillow>=11
 cryosparc-tools>=5.0,<5.1   # tested 5.0.2 and 5.0.3
 matplotlib>=3.8.0
 mrcfile>=1.5.0
@@ -271,8 +274,8 @@ The prompts ask for your CryoSPARC login, a project title and parent directory, 
 | Option | Default | Effect |
 | --- | --- | --- |
 | `--processing-guide original\|v5\|PATH` | `original` | Processing guide the agent searches. |
-| `--model` | `gpt-5.5` | OpenAI model for a new session (also `OPENAI_MODEL`). |
-| `--reasoning-effort` | `xhigh` | Reasoning setting for a new session (also `REASONING_EFFORT`). |
+| `--model` | `gpt-5.5` | Model for a new session (also `OPENAI_MODEL`). A Claude model such as `claude-sonnet-5-5` runs on the Anthropic API and needs `ANTHROPIC_API_KEY`. |
+| `--reasoning-effort` | `xhigh` | Reasoning setting for a new session (also `REASONING_EFFORT`). For Claude models it sets the effort level; `none` and `minimal` become `low`. |
 | `--cryosparc-url`, `--cryosparc-email` | prompted | CryoSPARC login. The password is prompted or read from `CRYOSPARC_PASSWORD`. |
 | `--session-db` | `~/.cryopilot/sessions.sqlite3` | Session database (also `CRYOPILOT_SESSION_DB`). |
 

@@ -8,6 +8,7 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
+import anthropic
 from fastapi import APIRouter, Request
 
 from . import cryosparc_bridge, cryozeta_bridge, guides, modeling_toolchain
@@ -17,6 +18,7 @@ from .state import (
     RECONSTRUCTION_SUPPORTED,
     REASONING_EFFORTS,
     SYSTEM,
+    anthropic_key,
     api_error,
     credentials,
     cryosparc_credentials,
@@ -47,6 +49,10 @@ def _openai_view() -> dict[str, Any]:
     return {"configured": bool(openai_key()), "source": credentials.source("openai_api_key")}
 
 
+def _anthropic_view() -> dict[str, Any]:
+    return {"configured": bool(anthropic_key()), "source": credentials.source("anthropic_api_key")}
+
+
 def _license_view() -> dict[str, Any]:
     accepted = store.get_setting("license_accepted") or {}
     current = accepted.get("license") == LICENSE_ID
@@ -59,6 +65,7 @@ def setup_view() -> dict[str, Any]:
         "onboarded": bool(store.get_setting("onboarded", False)),
         "platform": {"system": SYSTEM, "reconstruction_supported": RECONSTRUCTION_SUPPORTED},
         "openai": _openai_view(),
+        "anthropic": _anthropic_view(),
         "cryosparc": cryosparc_settings(),
         "cryozeta": cryozeta_settings(),
         "processing_guide": processing_guide(),
@@ -74,6 +81,7 @@ def health() -> dict[str, Any]:
     return {
         "ok": True,
         "openai_key_set": bool(openai_key()),
+        "anthropic_key_set": bool(anthropic_key()),
         "harness_db": str(HARNESS_SESSION_DB),
         "harness_db_exists": HARNESS_SESSION_DB.exists(),
         "modeling_python": MODELING_PYTHON,
@@ -127,6 +135,12 @@ async def put_settings(request: Request) -> dict[str, Any]:
         credentials.set("openai_api_key", str(openai["api_key"]))
     if openai.get("clear"):
         credentials.set("openai_api_key", None)
+
+    claude = body.get("anthropic") or {}
+    if claude.get("api_key"):
+        credentials.set("anthropic_api_key", str(claude["api_key"]))
+    if claude.get("clear"):
+        credentials.set("anthropic_api_key", None)
 
     cryosparc = body.get("cryosparc") or {}
     if cryosparc:
@@ -214,6 +228,23 @@ def test_openai() -> dict[str, Any]:
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise api_error(502, f"Could not reach OpenAI: {getattr(exc, 'reason', exc)}")
     models = sorted(str(entry.get("id")) for entry in payload.get("data") or [] if entry.get("id"))
+    default = defaults()["reconstruction_model"]
+    return {"ok": True, "model_count": len(models), "default_model_available": default in models, "models": models}
+
+
+@router.post("/api/settings/anthropic/test")
+def test_anthropic() -> dict[str, Any]:
+    key = anthropic_key()
+    if not key:
+        raise api_error(400, "Enter an Anthropic API key first.")
+    try:
+        models = sorted(model.id for model in anthropic.Anthropic(api_key=key, timeout=20).models.list(limit=100))
+    except anthropic.AuthenticationError:
+        raise api_error(502, "Anthropic rejected this API key.")
+    except anthropic.APIStatusError as exc:
+        raise api_error(502, f"Anthropic returned HTTP {exc.status_code}.")
+    except anthropic.APIConnectionError as exc:
+        raise api_error(502, f"Could not reach Anthropic: {exc}")
     default = defaults()["reconstruction_model"]
     return {"ok": True, "model_count": len(models), "default_model_available": default in models, "models": models}
 

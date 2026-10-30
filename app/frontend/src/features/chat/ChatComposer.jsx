@@ -12,7 +12,12 @@ import { AttachMenu, attachmentChip } from '../attachments/AttachMenu'
 import { effortLabel } from '../new/AgentChips'
 
 /** The button that fixes a missing credential, by the service the server names in `err.setup`. */
-export const SETUP_ACTIONS = { openai: 'Add OpenAI key', cryosparc: 'Sign in to CryoSPARC', cryozeta: 'Sign in to CryoZeta' }
+export const SETUP_ACTIONS = {
+  openai: 'Add OpenAI key',
+  anthropic: 'Add Anthropic key',
+  cryosparc: 'Sign in to CryoSPARC',
+  cryozeta: 'Sign in to CryoZeta',
+}
 
 function draftKey(sessionId) {
   return `cryopilot-draft:${sessionId}`

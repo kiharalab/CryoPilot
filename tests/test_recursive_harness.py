@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import harness
+import llm_client
 from session_store import SessionStore
 
 
@@ -66,9 +67,14 @@ class FakeResponses:
         return len(self._responses)
 
 
-class FakeClient:
-    def __init__(self, *responses):
-        self.responses = FakeResponses(responses)
+class FakeClient(llm_client.OpenAIResponsesClient):
+    def __init__(self, *responses, native=True, reasoning_effort=None):
+        super().__init__(
+            SimpleNamespace(responses=FakeResponses(responses)),
+            native=native,
+            reasoning_effort=reasoning_effort,
+        )
+        self.responses = self.sdk.responses
 
 
 class FakeController:
@@ -178,8 +184,6 @@ class RecursiveHarnessTests(unittest.TestCase):
         "client",
         "MODEL",
         "REASONING_EFFORT",
-        "use_reasoning_effort",
-        "use_native_openai",
         "CONTEXT_COMPACTION_ENABLED",
         "CONTEXT_WINDOW",
         "CONTEXT_COMPACTION_THRESHOLD",
@@ -205,8 +209,6 @@ class RecursiveHarnessTests(unittest.TestCase):
 
         harness.MODEL = "test-model"
         harness.REASONING_EFFORT = ""
-        harness.use_reasoning_effort = False
-        harness.use_native_openai = True
         harness.CONTEXT_COMPACTION_ENABLED = False
         harness.TRACE_TOOLS = False
         self.workflow = FakeWorkflow()

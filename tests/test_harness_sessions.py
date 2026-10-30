@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import harness
+import llm_client
 from session_store import SessionStore
 from startup_cli import bind_manifest_scope
 
@@ -76,9 +77,14 @@ class FakeResponses:
         return self._responses.pop(0)
 
 
-class FakeClient:
-    def __init__(self, *responses):
-        self.responses = FakeResponses(responses)
+class FakeClient(llm_client.OpenAIResponsesClient):
+    def __init__(self, *responses, native=True, reasoning_effort=None):
+        super().__init__(
+            SimpleNamespace(responses=FakeResponses(responses)),
+            native=native,
+            reasoning_effort=reasoning_effort,
+        )
+        self.responses = self.sdk.responses
 
 
 class FakeController:
@@ -153,8 +159,6 @@ class HarnessSessionTests(unittest.TestCase):
         "client",
         "MODEL",
         "REASONING_EFFORT",
-        "use_reasoning_effort",
-        "use_native_openai",
         "CONTEXT_COMPACTION_ENABLED",
         "TRACE_TOOLS",
     )
@@ -236,8 +240,6 @@ class HarnessSessionTests(unittest.TestCase):
             output_text="Reconstruction session initialized.",
         )
         harness.client = FakeClient(response)
-        harness.use_native_openai = True
-        harness.use_reasoning_effort = True
 
         with contextlib.redirect_stdout(io.StringIO()):
             harness.run_agent(
@@ -332,9 +334,11 @@ class HarnessSessionTests(unittest.TestCase):
     def test_keyboard_interrupt_during_model_call_preserves_request_checkpoint(self):
         session_id = self.create_session(status="running")
         self.activate(session_id)
-        harness.client = SimpleNamespace(
-            responses=SimpleNamespace(
-                create=mock.Mock(side_effect=KeyboardInterrupt)
+        harness.client = llm_client.OpenAIResponsesClient(
+            SimpleNamespace(
+                responses=SimpleNamespace(
+                    create=mock.Mock(side_effect=KeyboardInterrupt)
+                )
             )
         )
 
@@ -643,11 +647,8 @@ class HarnessSessionTests(unittest.TestCase):
         )
 
     def test_create_response_uses_native_stateless_replay_options_only_for_openai(self):
-        native_client = FakeClient("native-response")
+        native_client = FakeClient("native-response", reasoning_effort="high")
         harness.client = native_client
-        harness.use_native_openai = True
-        harness.use_reasoning_effort = True
-        harness.REASONING_EFFORT = "high"
 
         result = harness.create_response(
             model="gpt-5.5",
@@ -664,10 +665,8 @@ class HarnessSessionTests(unittest.TestCase):
             ["message.input_image.image_url", "reasoning.encrypted_content"],
         )
 
-        compatible_client = FakeClient("compatible-response")
+        compatible_client = FakeClient("compatible-response", native=False)
         harness.client = compatible_client
-        harness.use_native_openai = False
-        harness.use_reasoning_effort = False
         result = harness.create_response(model="ollama-model", input=[])
 
         self.assertEqual(result, "compatible-response")
@@ -715,7 +714,6 @@ class HarnessSessionTests(unittest.TestCase):
         original = copy.deepcopy(source)
         fake_client = FakeClient("response")
         harness.client = fake_client
-        harness.use_native_openai = True
 
         harness.create_response(model="gpt-5.5", input=source)
 
@@ -773,7 +771,6 @@ class HarnessSessionTests(unittest.TestCase):
 
             fake_client = FakeClient("response")
             harness.client = fake_client
-            harness.use_native_openai = True
             harness.create_response(
                 model="gpt-5.5",
                 input=[{"role": "user", "content": environment_secret}],

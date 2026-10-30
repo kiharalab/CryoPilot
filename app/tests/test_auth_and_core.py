@@ -31,6 +31,7 @@ from app import serve  # noqa: E402
 from app.server import auth, files, main, processes as processes_module  # noqa: E402
 from app.server.credentials import Credentials  # noqa: E402
 from app.server.main import app  # noqa: E402
+from app.server import state  # noqa: E402
 from app.server.state import bus, defaults, driver_env, processes, store  # noqa: E402
 
 HEADERS = {"Authorization": f"Bearer {auth.TOKEN}"}
@@ -298,7 +299,8 @@ def _resume_fixture(monkeypatch, sandbox, *, provider: str | None):
     monkeypatch.setattr(main, "ALLOW_RECONSTRUCTION", True)
     monkeypatch.setattr(main, "cryosparc_settings", lambda: {"url": "http://localhost:61000", "email": "a@b.c", "password_set": True})
     key_checks = []
-    monkeypatch.setattr(main, "require_openai_key", lambda: key_checks.append(True))
+    monkeypatch.setattr(state, "require_openai_key", lambda: key_checks.append("openai"))
+    monkeypatch.setattr(state, "anthropic_key", lambda: "")
     started = {}
 
     def failing_start(session_id, **kwargs):
@@ -342,7 +344,15 @@ def test_resume_uses_the_default_guide_and_reports_a_failed_start(client, monkey
 def test_resume_with_unknown_provider_requires_the_openai_key(client, monkeypatch, sandbox):
     session, key_checks, _ = _resume_fixture(monkeypatch, sandbox, provider=None)
     assert client.post(f"/api/sessions/{session['id']}/messages", json={"content": "Continue"}).status_code == 500
-    assert key_checks == [True]
+    assert key_checks == ["openai"]
+
+
+def test_resume_of_a_claude_session_requires_the_anthropic_key(client, monkeypatch, sandbox):
+    session, key_checks, started = _resume_fixture(monkeypatch, sandbox, provider="anthropic")
+    response = client.post(f"/api/sessions/{session['id']}/start")
+    assert response.status_code == 400
+    assert response.json()["setup"] == "anthropic"
+    assert key_checks == [] and started == {}
 
 
 def test_import_records_a_given_guide(client, monkeypatch):
@@ -360,8 +370,10 @@ def test_each_agent_gets_only_its_own_account():
     modeling = driver_env("modeling")
     assert "OPENAI_API_KEY" in modeling and "CRYOZETA_PASSWORD" in modeling
     assert not any(name.startswith("CRYOSPARC_") for name in modeling)
+    assert "ANTHROPIC_API_KEY" not in modeling
     reconstruction = driver_env("reconstruction", guide="v5")
     assert reconstruction["CRYOEM_GUIDE"] == "v5" and "CRYOSPARC_PASSWORD" in reconstruction
+    assert "ANTHROPIC_API_KEY" in reconstruction
     assert not any(name.startswith("CRYOZETA_") for name in reconstruction)
 
 

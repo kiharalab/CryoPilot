@@ -1,4 +1,4 @@
-// Settings > Accounts: OpenAI, CryoSPARC, and CryoZeta, each with its
+// Settings > Accounts: OpenAI, Anthropic, CryoSPARC, and CryoZeta, each with its
 // status, a form to change it, a connection test, and sign out; then the
 // "remember passwords" switch and signing this browser out of CryoPilot.
 import { useEffect, useState } from 'react'
@@ -11,9 +11,11 @@ import { Button, ConfirmDialog, Switch } from '../../components/ui'
 import {
   ResultLine,
   ServiceFields,
+  SERVICE_NAMES,
   ServiceTitle,
   initialValues,
   isConfigured,
+  isKeyService,
   saveAndTest,
   systemName,
   testService,
@@ -26,6 +28,10 @@ const ACCOUNT_INFO = {
     icon: KeyRound,
     purpose: 'Both agents run on OpenAI models with this key.',
   },
+  anthropic: {
+    icon: KeyRound,
+    purpose: 'The reconstruction agent runs on Claude models with this key. The modeling agent runs on OpenAI models.',
+  },
   cryosparc: {
     icon: Microscope,
     purpose: 'The reconstruction agent creates and runs jobs in CryoSPARC with this account. The Maps panel reads live job status from it.',
@@ -36,15 +42,17 @@ const ACCOUNT_INFO = {
   },
 }
 
+const KEY_VARIABLES = { openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY' }
+
 /** {tone: 'on'|'pending'|'off', label, detail} for the card header. */
 function accountStatus(service, setup) {
-  if (service === 'openai') {
-    const openai = setup?.openai || {}
-    if (!openai.configured) return { tone: 'off', label: 'Not set', detail: ACCOUNT_INFO.openai.purpose }
+  if (isKeyService(service)) {
+    const key = setup?.[service] || {}
+    if (!key.configured) return { tone: 'off', label: 'Not set', detail: ACCOUNT_INFO[service].purpose }
     return {
       tone: 'on',
       label: 'Connected',
-      detail: openai.source === 'environment' ? 'Using OPENAI_API_KEY from the environment CryoPilot started in.' : 'API key saved in CryoPilot.',
+      detail: key.source === 'environment' ? `Using ${KEY_VARIABLES[service]} from the environment CryoPilot started in.` : 'API key saved in CryoPilot.',
     }
   }
   const settings = (service === 'cryosparc' ? setup?.cryosparc : setup?.cryozeta) || {}
@@ -132,7 +140,7 @@ function AccountCard({ service }) {
     setBusy('remove')
     try {
       const body =
-        service === 'openai' ? { openai: { clear: true } } : service === 'cryosparc' ? { cryosparc: { clear_password: true } } : { cryozeta: { clear_password: true } }
+        isKeyService(service) ? { [service]: { clear: true } } : service === 'cryosparc' ? { cryosparc: { clear_password: true } } : { cryozeta: { clear_password: true } }
       const next = await api.saveSettings(body)
       setSetup(next)
       setValues(initialValues(service, next))
@@ -140,13 +148,13 @@ function AccountCard({ service }) {
       setEditing(false)
       setConfirmRemove(false)
     } catch (err) {
-      toast({ title: service === 'openai' ? 'Could not remove the key' : 'Could not sign out', description: err.message, tone: 'error' })
+      toast({ title: isKeyService(service) ? 'Could not remove the key' : 'Could not sign out', description: err.message, tone: 'error' })
     } finally {
       setBusy(null)
     }
   }
 
-  const removeLabel = service === 'openai' ? 'Remove key' : 'Sign out'
+  const removeLabel = isKeyService(service) ? 'Remove key' : 'Sign out'
 
   return (
     <div className="rounded-xl border border-line">
@@ -171,14 +179,14 @@ function AccountCard({ service }) {
               Test connection
             </Button>
             <Button size="sm" variant="ghost" disabled={Boolean(busy)} onClick={startEditing}>
-              {service === 'openai' ? 'Replace key' : 'Edit'}
+              {isKeyService(service) ? 'Replace key' : 'Edit'}
             </Button>
             <Button
               size="sm"
               variant="danger-ghost"
               loading={busy === 'remove'}
               disabled={Boolean(busy)}
-              onClick={() => (service === 'openai' ? setConfirmRemove(true) : remove())}
+              onClick={() => (isKeyService(service) ? setConfirmRemove(true) : remove())}
             >
               {removeLabel}
             </Button>
@@ -212,7 +220,7 @@ function AccountCard({ service }) {
               </Button>
             ) : null}
             <Button type="submit" variant="primary" loading={busy === 'save'}>
-              {configured ? 'Save' : service === 'openai' ? 'Save key' : 'Sign in'}
+              {configured ? 'Save' : isKeyService(service) ? 'Save key' : 'Sign in'}
             </Button>
           </div>
         </form>
@@ -224,15 +232,16 @@ function AccountCard({ service }) {
         </div>
       ) : null}
 
-      {service === 'openai' ? (
+      {isKeyService(service) ? (
         <ConfirmDialog
           open={confirmRemove}
           onOpenChange={setConfirmRemove}
-          title="Remove the OpenAI API key?"
+          title={`Remove the ${SERVICE_NAMES[service]} API key?`}
           description={
-            setup?.openai?.source === 'environment'
-              ? 'Agents cannot start until you add a key again. CryoPilot reads OPENAI_API_KEY from the environment again the next time it starts.'
-              : 'Agents cannot start until you add a key again.'
+            (service === 'anthropic' ? 'Claude models cannot run until you add a key again.' : 'Agents cannot start until you add a key again.') +
+            (setup?.[service]?.source === 'environment'
+              ? ` CryoPilot reads ${KEY_VARIABLES[service]} from the environment again the next time it starts.`
+              : '')
           }
           confirmLabel="Remove key"
           busy={busy === 'remove'}
@@ -323,6 +332,7 @@ export function AccountsSection() {
       <SettingsGroup>
         <div className="flex flex-col gap-3">
           <AccountCard service="openai" />
+          <AccountCard service="anthropic" />
           <AccountCard service="cryosparc" />
           {!reconstructionSupported ? (
             <p className="-mt-1 px-1 text-xs text-muted">

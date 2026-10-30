@@ -87,8 +87,11 @@ def test_particles_manifest_keeps_metadata_path():
 def test_agent_config_defaults_and_limits():
     config = build_agent_config({"provider": "OpenAI", "reasoning_effort": "High", "rlm_max_depth": "3", "rlm_max_calls": ""})
     assert config == {"provider": "openai", "reasoning_effort": "high", "rlm_max_depth": 3}
+    # A Claude model runs on Anthropic unless the form names a provider.
+    assert build_agent_config({"model": "claude-sonnet-5-5"}) == {"provider": "anthropic", "model": "claude-sonnet-5-5"}
+    assert build_agent_config({"model": "gpt-5.5"})["provider"] == "openai"
     with pytest.raises(ManifestError):
-        build_agent_config({"provider": "anthropic"})
+        build_agent_config({"provider": "gemini"})
     with pytest.raises(ManifestError):
         build_agent_config({"rlm_max_depth": "0"})
 

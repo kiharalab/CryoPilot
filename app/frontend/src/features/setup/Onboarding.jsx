@@ -68,7 +68,7 @@ export function Onboarding({ onDone }) {
         <CredentialStep
           {...credentialProps('openai')}
           title="Connect OpenAI"
-          description="Both agents run on OpenAI models. They use GPT-5.5 by default, and any OpenAI model works. Support for Anthropic models is coming soon."
+          description="Both agents run on OpenAI models. They use GPT-5.5 by default, and any OpenAI model works. To run the reconstruction agent on a Claude model, add an Anthropic API key later in Settings."
           footnote={
             <>
               Create a key at{' '}

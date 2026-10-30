@@ -69,10 +69,13 @@ Agreeing to the license is saved in the app database (`license_accepted`), so on
 person agrees for everyone. An install set up under an earlier license shows the agreement once on its
 own before the workspace.
 
-URLs, emails, and user names are saved in the app database. Passwords and the API key stay in the
+To run the reconstruction agent on a Claude model, add an Anthropic API key in **Settings > Accounts**
+and choose a model such as `claude-sonnet-5-5`; the modeling agent runs on OpenAI models only.
+
+URLs, emails, and user names are saved in the app database. Passwords and the API keys stay in the
 server's memory, unless you turn on **Remember passwords on this computer**. They are then written to
 `~/.cryopilot/app/credentials.json` with mode 0600. When the server restarts without remembered
-passwords, a sign-in screen asks for them again. `OPENAI_API_KEY`, `CRYOSPARC_BASE_URL`,
+passwords, a sign-in screen asks for them again. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `CRYOSPARC_BASE_URL`,
 `CRYOSPARC_EMAIL`, `CRYOSPARC_PASSWORD`, `CRYOZETA_BASE_URL`, `CRYOZETA_USERNAME`, and
 `CRYOZETA_PASSWORD` in the server environment are used as defaults. An agent process reads the
 credentials when it starts, so stop and resume a running session after you change them.

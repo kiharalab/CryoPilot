@@ -7,6 +7,7 @@ import { Button } from '../../components/ui'
 
 const SETUP_MESSAGES = {
   openai: 'Add your OpenAI API key in Settings to start an agent.',
+  anthropic: 'Add your Anthropic API key in Settings to run a Claude model.',
   cryosparc: 'Sign in to CryoSPARC in Settings to start a reconstruction.',
   cryozeta: 'Sign in to CryoZeta in Settings to build models from a sequence.',
 }

@@ -116,8 +116,6 @@ class RecursiveResumeTests(unittest.TestCase):
         "client",
         "MODEL",
         "REASONING_EFFORT",
-        "use_reasoning_effort",
-        "use_native_openai",
         "CONTEXT_COMPACTION_ENABLED",
         "CONTEXT_WINDOW",
         "CONTEXT_COMPACTION_THRESHOLD",

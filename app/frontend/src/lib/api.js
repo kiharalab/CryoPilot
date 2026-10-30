@@ -80,6 +80,7 @@ export const api = {
   //        remember_credentials, defaults:{...}} -> setup payload
   saveSettings: (body) => request('/api/settings', { method: 'PUT', body }),
   testOpenai: () => request('/api/settings/openai/test', { method: 'POST' }),
+  testAnthropic: () => request('/api/settings/anthropic/test', { method: 'POST' }),
   testCryosparc: () => request('/api/settings/cryosparc/test', { method: 'POST' }),
   testCryozeta: () => request('/api/settings/cryozeta/test', { method: 'POST' }),
   refreshModelingTools: () => request('/api/settings/modeling-tools/refresh', { method: 'POST' }),

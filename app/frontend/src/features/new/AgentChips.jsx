@@ -6,6 +6,7 @@ import { BookOpen, Check, ChevronDown } from 'lucide-react'
 import { cx } from '../../lib/cx'
 import { pluralize } from '../../lib/format'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui'
+import { CLAUDE_MODELS } from '../setup/services'
 
 export const EFFORTS = [
   { value: 'minimal', label: 'Minimal' },
@@ -82,12 +83,13 @@ function Choice({ selected, onSelect, disabled, children, className }) {
 /**
  * Model and reasoning effort for one session.
  * Props: model, effort, onModelChange(model), onEffortChange(effort), defaultModel,
- * efforts (the choices; EFFORTS unless given).
+ * efforts (the choices; EFFORTS unless given), claude (also offer Claude models).
  */
-export function ModelChip({ model, effort, onModelChange, onEffortChange, defaultModel, efforts = EFFORTS, disabled }) {
+export function ModelChip({ model, effort, onModelChange, onEffortChange, defaultModel, efforts = EFFORTS, claude = false, disabled }) {
   const [open, setOpen] = useState(false)
   const [custom, setCustom] = useState('')
-  const suggestions = [...new Set([defaultModel, ...MODEL_SUGGESTIONS, model].filter(Boolean))]
+  const suggestions = [...new Set([defaultModel, ...MODEL_SUGGESTIONS, ...(claude ? CLAUDE_MODELS : []), model].filter(Boolean))]
+  const customLabel = claude ? 'Another OpenAI or Claude model' : 'Another OpenAI model'
 
   const applyCustom = () => {
     const next = custom.trim()
@@ -128,8 +130,8 @@ export function ModelChip({ model, effort, onModelChange, onEffortChange, defaul
                   applyCustom()
                 }
               }}
-              placeholder="Another OpenAI model"
-              aria-label="Another OpenAI model"
+              placeholder={customLabel}
+              aria-label={customLabel}
               spellCheck={false}
               autoCapitalize="off"
               className="h-8 w-full rounded-md border border-line bg-canvas px-2 font-mono text-[12.5px] text-fg placeholder:font-sans placeholder:text-faint focus:border-accent focus:outline-none"

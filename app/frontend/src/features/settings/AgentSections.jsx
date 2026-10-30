@@ -56,10 +56,16 @@ export function ReconstructionSection() {
       </SettingsGroup>
 
       <SettingsGroup title="Defaults" description="New reconstruction sessions start with these. You can change both when you start a session.">
-        <SettingsRow title="Model" description="Any OpenAI model. Anthropic models are coming soon." htmlFor="settings-reconstruction-model" error={errors.reconstruction_model}>
+        <SettingsRow
+          title="Model"
+          description="Any OpenAI model, or a Claude model with an Anthropic API key."
+          htmlFor="settings-reconstruction-model"
+          error={errors.reconstruction_model}
+        >
           <ModelInput
             id="settings-reconstruction-model"
             className="w-56"
+            claude
             value={defaults.reconstruction_model}
             invalid={Boolean(errors.reconstruction_model)}
             onCommit={(model) => saveDefault('reconstruction_model', model)}

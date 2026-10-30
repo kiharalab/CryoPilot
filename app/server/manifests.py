@@ -16,6 +16,7 @@ from .config import REPO_ROOT
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from llm_client import PROVIDERS, provider_for_model  # noqa: E402
 from startup_cli import DATASET_KINDS, MANIFEST_SCHEMA_VERSION, WORKSPACE_TITLE  # noqa: E402
 
 
@@ -176,14 +177,14 @@ def build_manifest(form: dict[str, Any]) -> dict[str, Any]:
 
 def build_agent_config(form: dict[str, Any]) -> dict[str, Any]:
     errors: dict[str, str] = {}
-    provider = _text(form.get("provider")).strip().lower() or "openai"
-    if provider not in {"openai", "ollama"}:
-        errors["provider"] = "Choose openai or ollama"
+    model = _text(form.get("model")).strip()
+    provider = _text(form.get("provider")).strip().lower() or provider_for_model(model)
+    if provider not in PROVIDERS:
+        errors["provider"] = "Choose openai, anthropic, or ollama"
     reasoning_effort = _text(form.get("reasoning_effort")).strip().lower() or None
     if reasoning_effort and reasoning_effort not in {"none", "minimal", "low", "medium", "high", "xhigh"}:
         errors["reasoning_effort"] = "Unknown reasoning effort"
     config: dict[str, Any] = {"provider": provider}
-    model = _text(form.get("model")).strip()
     if model:
         config["model"] = model
     if reasoning_effort:

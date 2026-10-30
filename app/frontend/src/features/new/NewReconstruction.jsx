@@ -12,6 +12,7 @@ import { Button, Field, InlineError, Input, Menu, MenuContent, MenuItem, MenuLab
 import { PathInput } from './PathInput'
 import { GuideChip, ModelChip, RECONSTRUCTION_EFFORTS } from './AgentChips'
 import { SetupNotice, setupMessage } from './SetupNotice'
+import { modelService } from '../setup/services'
 
 const FORM_KEY = 'cryopilot-reconstruction-form'
 
@@ -254,12 +255,14 @@ export function NewReconstruction() {
 
   const platformReady = Boolean(setup?.platform?.reconstruction_supported)
   const cryosparcReady = Boolean(setup?.cryosparc?.email && setup?.cryosparc?.password_set)
-  const openaiReady = Boolean(setup?.openai?.configured)
-  const ready = platformReady && cryosparcReady && openaiReady
+  // The chosen model's API key: Claude models run on Anthropic.
+  const keyService = modelService(model)
+  const keyReady = Boolean(setup?.[keyService]?.configured)
+  const ready = platformReady && cryosparcReady && keyReady
   // Shown above the composer, so the reason it cannot send stays in view while the cards scroll.
   const missingSetup = []
   if (platformReady && !cryosparcReady) missingSetup.push('cryosparc')
-  if (platformReady && !openaiReady) missingSetup.push('openai')
+  if (platformReady && !keyReady) missingSetup.push(keyService)
 
   const update = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }))
@@ -563,6 +566,7 @@ export function NewReconstruction() {
                     onEffortChange={setEffort}
                     defaultModel={setup?.defaults?.reconstruction_model}
                     efforts={RECONSTRUCTION_EFFORTS}
+                    claude
                   />
                   <GuideChip guides={guides} value={guide} onChange={setGuide} defaultGuide={setup?.processing_guide} />
                 </>

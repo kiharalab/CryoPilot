@@ -7,7 +7,7 @@ import { cx } from '../../lib/cx'
 import { useApp } from '../../store/app'
 import { Input, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Segmented } from '../../components/ui'
 import { EFFORTS } from '../new/AgentChips'
-import { loadAccountModels, suggestedModels } from '../setup/services'
+import { CLAUDE_MODELS, loadAccountModels, suggestedModels } from '../setup/services'
 
 /** Saves a settings change and puts the new setup in the store. Throws after toasting on failure. */
 export function useSaveSettings() {
@@ -64,8 +64,9 @@ export function SettingsRow({ title, description, htmlFor, error, stacked = fals
  * Free-text model name with a menu of suggestions. Commits on Enter, on
  * blur, and when a suggestion is picked; an empty field restores the value.
  * `onCommit(model)` may return false (or a promise of false) when saving failed.
+ * `claude` lists Claude models too (the reconstruction agent runs on them).
  */
-export function ModelInput({ id, value, onCommit, invalid, className }) {
+export function ModelInput({ id, value, onCommit, invalid, className, claude = false }) {
   const [text, setText] = useState(value || '')
   const [accountModels, setAccountModels] = useState(null)
   const openaiConfigured = useApp((state) => Boolean(state.setup?.openai?.configured))
@@ -91,6 +92,10 @@ export function ModelInput({ id, value, onCommit, invalid, className }) {
   }
 
   const models = suggestedModels(accountModels)
+  const pick = (model) => {
+    setText(model)
+    commit(model)
+  }
 
   return (
     <div className={cx('relative', className)}>
@@ -130,22 +135,23 @@ export function ModelInput({ id, value, onCommit, invalid, className }) {
         <MenuContent align="end" className="w-[240px]">
           <MenuLabel>OpenAI</MenuLabel>
           {models.map((model) => (
-            <MenuItem
-              key={model}
-              checked={model === value}
-              onSelect={() => {
-                setText(model)
-                commit(model)
-              }}
-            >
+            <MenuItem key={model} checked={model === value} onSelect={() => pick(model)}>
               <span className="font-mono text-[12.5px]">{model}</span>
             </MenuItem>
           ))}
           <MenuSeparator />
           <MenuLabel>Anthropic</MenuLabel>
-          <MenuItem disabled hint="Coming soon">
-            Claude models
-          </MenuItem>
+          {claude ? (
+            CLAUDE_MODELS.map((model) => (
+              <MenuItem key={model} checked={model === value} onSelect={() => pick(model)}>
+                <span className="font-mono text-[12.5px]">{model}</span>
+              </MenuItem>
+            ))
+          ) : (
+            <MenuItem disabled hint="Coming soon">
+              Claude models
+            </MenuItem>
+          )}
         </MenuContent>
       </Menu>
     </div>

@@ -1,4 +1,4 @@
-// The three accounts the agents use (OpenAI, CryoSPARC, and CryoZeta, the
+// The accounts the agents use (OpenAI, Anthropic, CryoSPARC, and CryoZeta, the
 // Kihara Lab EM server): their form fields, validation, and save-then-test.
 // Onboarding, SignIn, and Settings > Accounts all build on these.
 import { useState } from 'react'
@@ -8,7 +8,20 @@ import { cx } from '../../lib/cx'
 import { pluralize } from '../../lib/format'
 import { Field, IconButton, Input } from '../../components/ui'
 
-export const SERVICE_NAMES = { openai: 'OpenAI', cryosparc: 'CryoSPARC', cryozeta: 'CryoZeta' }
+export const SERVICE_NAMES = { openai: 'OpenAI', anthropic: 'Anthropic', cryosparc: 'CryoSPARC', cryozeta: 'CryoZeta' }
+
+/** True for the services whose only credential is an API key. */
+export function isKeyService(service) {
+  return service === 'openai' || service === 'anthropic'
+}
+
+/** The service whose API key runs a model: Claude models run on Anthropic. */
+export function modelService(model) {
+  return String(model || '').startsWith('claude-') ? 'anthropic' : 'openai'
+}
+
+/** Claude models the reconstruction agent can run on, newest and most capable first. */
+export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
 
 /** "CryoZeta, the Kihara Lab EM server": a service's name where a screen introduces it. */
 export function ServiceTitle({ service }) {
@@ -36,21 +49,21 @@ export function servicesNeedingSignIn(setup) {
 }
 
 export function initialValues(service, setup) {
-  if (service === 'openai') return { api_key: '' }
+  if (isKeyService(service)) return { api_key: '' }
   if (service === 'cryosparc') return { url: setup?.cryosparc?.url || '', email: setup?.cryosparc?.email || '', password: '' }
   return { base_url: setup?.cryozeta?.base_url || '', username: setup?.cryozeta?.username || '', password: '' }
 }
 
 /** True when the stored credentials are enough to run the connection test. */
 export function isConfigured(service, setup) {
-  if (service === 'openai') return Boolean(setup?.openai?.configured)
+  if (isKeyService(service)) return Boolean(setup?.[service]?.configured)
   if (service === 'cryosparc') return Boolean(setup?.cryosparc?.email && setup?.cryosparc?.password_set)
   return Boolean(setup?.cryozeta?.username && setup?.cryozeta?.password_set)
 }
 
 /** True when the form holds something that is not saved yet. */
 export function isDirty(service, values, setup) {
-  if (service === 'openai') return Boolean(values.api_key.trim())
+  if (isKeyService(service)) return Boolean(values.api_key.trim())
   if (service === 'cryosparc') {
     return values.url.trim() !== (setup?.cryosparc?.url || '') || values.email.trim() !== (setup?.cryosparc?.email || '') || Boolean(values.password)
   }
@@ -64,8 +77,8 @@ export function isDirty(service, values, setup) {
 /** Per-field messages for what is missing; empty when the form can be saved and tested. */
 export function validate(service, values, setup) {
   const errors = {}
-  if (service === 'openai') {
-    if (!values.api_key.trim() && !setup?.openai?.configured) errors.api_key = 'Enter your OpenAI API key.'
+  if (isKeyService(service)) {
+    if (!values.api_key.trim() && !setup?.[service]?.configured) errors.api_key = `Enter your ${SERVICE_NAMES[service]} API key.`
     return errors
   }
   if (service === 'cryosparc') {
@@ -81,9 +94,9 @@ export function validate(service, values, setup) {
 }
 
 function settingsBody(service, values) {
-  if (service === 'openai') {
+  if (isKeyService(service)) {
     const key = values.api_key.trim()
-    return key ? { openai: { api_key: key } } : null
+    return key ? { [service]: { api_key: key } } : null
   }
   if (service === 'cryosparc') {
     return { cryosparc: { url: values.url.trim(), email: values.email.trim(), ...(values.password ? { password: values.password } : {}) } }
@@ -93,15 +106,15 @@ function settingsBody(service, values) {
   }
 }
 
-const TESTS = { openai: api.testOpenai, cryosparc: api.testCryosparc, cryozeta: api.testCryozeta }
+const TESTS = { openai: api.testOpenai, anthropic: api.testAnthropic, cryosparc: api.testCryosparc, cryozeta: api.testCryozeta }
 
 /** Turns a test response into the line shown under the form. */
 function describeTest(service, response, setup) {
-  if (service === 'openai') {
-    rememberModels(response.models)
+  if (isKeyService(service)) {
+    if (service === 'openai') rememberModels(response.models)
     const text = `Connected. ${pluralize(response.model_count || 0, 'model')} available to this key.`
-    if (response.default_model_available === false) {
-      const model = setup?.defaults?.reconstruction_model || 'gpt-5.5'
+    const model = setup?.defaults?.reconstruction_model || 'gpt-5.5'
+    if (response.default_model_available === false && modelService(model) === service) {
       return { tone: 'warning', text: `${text} ${model} is not one of them, so choose another model in Settings.` }
     }
     return { tone: 'success', text }
@@ -270,18 +283,18 @@ function CollapsibleUrl({ label, value, error, onChange, placeholder }) {
 export function ServiceFields({ service, values, onChange, errors = {}, setup, autoFocus = false, compactUrl = false }) {
   const set = (key) => (value) => onChange({ ...values, [key]: value })
 
-  if (service === 'openai') {
-    const saved = setup?.openai?.configured
+  if (isKeyService(service)) {
+    const saved = setup?.[service]?.configured
     return (
       <Field label="API key" error={errors.api_key} hint={saved ? 'Leave this blank to keep the key CryoPilot already has.' : undefined}>
         {({ id }) => (
           <SecretInput
             id={id}
-            name="openai-api-key"
+            name={`${service}-api-key`}
             value={values.api_key}
             onChange={set('api_key')}
             invalid={Boolean(errors.api_key)}
-            placeholder={saved ? 'Enter a new key to replace it' : 'sk-...'}
+            placeholder={saved ? 'Enter a new key to replace it' : service === 'anthropic' ? 'sk-ant-...' : 'sk-...'}
             autoFocus={autoFocus}
             mono
           />

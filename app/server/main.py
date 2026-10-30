@@ -30,6 +30,7 @@ from .state import (
     driver_env,
     processes,
     processing_guide,
+    require_model_key,
     require_openai_key,
     require_project,
     require_session,
@@ -142,8 +143,7 @@ async def create_reconstruction_session(project_id: str, request: Request) -> di
         agent_config = _reconstruction_agent_config(body.get("agent") or {})
     except ManifestError as exc:
         raise api_error(422, "Check the highlighted fields", errors=exc.errors)
-    if agent_config["provider"] == "openai":
-        require_openai_key()
+    require_model_key(agent_config["provider"])
     settings = cryosparc_settings()
     if not settings["email"] or not settings["password_set"]:
         raise api_error(400, "Sign in to CryoSPARC in Settings before starting a session.", setup="cryosparc")
@@ -352,9 +352,7 @@ def _ensure_reconstruction_process(session: dict[str, Any]) -> None:
     settings = cryosparc_settings()
     if not settings["email"] or not settings["password_set"]:
         raise api_error(400, "Sign in to CryoSPARC in Settings before resuming.", setup="cryosparc")
-    # A session run with Ollama needs no OpenAI key; an unknown provider does.
-    if _reconstruction_provider(session) in (None, "openai"):
-        require_openai_key()
+    require_model_key(_reconstruction_provider(session))
     project = store.get_project(session["project_id"])
     dirs = file_roots.ensure_project_dirs(project["slug"])
     session_dir = Path(dirs["reconstruction"]) / session["id"]

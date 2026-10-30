@@ -96,6 +96,23 @@ def require_openai_key() -> None:
         raise api_error(400, "Add your OpenAI API key in Settings before starting an agent.", setup="openai")
 
 
+def anthropic_key() -> str:
+    return credentials.get("anthropic_api_key")
+
+
+def require_model_key(provider: str | None) -> None:
+    """The API key a reconstruction session's provider needs. Ollama needs none;
+    a run without a recorded provider ran on OpenAI."""
+
+    if provider == "ollama":
+        return
+    if provider == "anthropic":
+        if not anthropic_key():
+            raise api_error(400, "Add your Anthropic API key in Settings to run a Claude model.", setup="anthropic")
+        return
+    require_openai_key()
+
+
 def cryosparc_settings() -> dict[str, Any]:
     saved = store.get_setting("cryosparc", {}) or {}
     url = saved.get("url") or os.environ.get("CRYOSPARC_BASE_URL") or "http://localhost:61000"
@@ -139,7 +156,7 @@ def cryozeta_credentials() -> tuple[str, str, str]:
 
 
 def driver_env(agent: str, *, guide: str | None = None) -> dict[str, str]:
-    """Environment handed to an agent process: the OpenAI key and the account
+    """Environment handed to an agent process: the API keys and the account
     that agent uses (CryoSPARC for reconstruction, CryoZeta for modeling).
     Empty values are not exported."""
 
@@ -148,6 +165,7 @@ def driver_env(agent: str, *, guide: str | None = None) -> dict[str, str]:
         cryosparc = cryosparc_settings()
         env.update(
             {
+                "ANTHROPIC_API_KEY": anthropic_key(),
                 "CRYOSPARC_BASE_URL": cryosparc["url"],
                 "CRYOSPARC_EMAIL": cryosparc["email"],
                 "CRYOSPARC_PASSWORD": credentials.get("cryosparc_password"),

@@ -40,6 +40,7 @@ emitter = Emitter()
 redirect_stdout_to_stderr()
 
 import harness as H  # noqa: E402
+import llm_client  # noqa: E402
 from cryosparc_repl import connect_cryosparc  # noqa: E402
 from session_store import SessionStore  # noqa: E402
 from startup_cli import (  # noqa: E402
@@ -155,7 +156,7 @@ def start_new(args: argparse.Namespace, store: SessionStore, reader: CommandRead
     config = json.loads(Path(args.config).read_text(encoding="utf-8")) if args.config else {}
 
     provider = config.get("provider") or "openai"
-    model = config.get("model") or (H.OLLAMA_MODEL if provider == "ollama" else H.MODEL)
+    model = config.get("model") or llm_client.DEFAULT_MODELS[provider]
     reasoning_effort = None if provider == "ollama" else (config.get("reasoning_effort") or H.REASONING_EFFORT)
     recursion_config = H.configure_recursion_config(
         {

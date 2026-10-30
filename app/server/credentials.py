@@ -1,4 +1,4 @@
-"""Secrets the agents need: the OpenAI API key and the CryoSPARC and CryoZeta passwords.
+"""Secrets the agents need: the OpenAI and Anthropic API keys and the CryoSPARC and CryoZeta passwords.
 
 They live in this process's memory. When the user turns on "Remember on this
 computer", they are also written to ``APP_HOME/credentials.json``, readable
@@ -18,9 +18,10 @@ from typing import Any
 from .config import APP_HOME
 
 CREDENTIALS_PATH = APP_HOME / "credentials.json"
-SECRET_KEYS = ("openai_api_key", "cryosparc_password", "cryozeta_password")
+SECRET_KEYS = ("openai_api_key", "anthropic_api_key", "cryosparc_password", "cryozeta_password")
 ENVIRONMENT_NAMES = {
     "openai_api_key": "OPENAI_API_KEY",
+    "anthropic_api_key": "ANTHROPIC_API_KEY",
     "cryosparc_password": "CRYOSPARC_PASSWORD",
     "cryozeta_password": "CRYOZETA_PASSWORD",
 }

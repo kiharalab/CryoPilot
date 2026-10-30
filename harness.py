@@ -17,13 +17,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from openai import OpenAI
-
+import llm_client
 from cryosparc_repl import (
     CRYOSPARC_HELP,
     connect_cryosparc,
     connect_cryosparc_from_env,
     job_summary,
+)
+from llm_client import (
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    is_context_window_error,
+    response_output_items,
+    response_text,
 )
 from session_store import RecursiveLimitError, SessionNotFoundError, SessionStore
 from startup_cli import (
@@ -37,7 +43,7 @@ from startup_cli import (
 )
 
 
-MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.5")
+MODEL = llm_client.DEFAULT_MODELS["openai"]
 REASONING_EFFORT = os.environ.get(
     "OPENAI_REASONING_EFFORT",
     os.environ.get("REASONING_EFFORT", "xhigh"),
@@ -64,14 +70,9 @@ TOOL_OUTPUT_MAX_CHARS = int(os.environ.get("TOOL_OUTPUT_MAX_CHARS", "60000"))
 RLM_MAX_DEPTH = int(os.environ.get("RLM_MAX_DEPTH", "4"))
 RLM_MAX_CALLS = int(os.environ.get("RLM_MAX_CALLS", "16"))
 RLM_MAX_MODEL_TURNS = int(os.environ.get("RLM_MAX_MODEL_TURNS", "64"))
-OLLAMA_BASE_URL = "http://localhost:11434/v1/"
-OLLAMA_API_KEY = "ollama"
-OLLAMA_MODEL = "gemma4:12b-mlx"
 
 
 client = None
-use_reasoning_effort = True
-use_native_openai = True
 agent_memory = {
     "full_history": [],
     "active_messages": [],
@@ -224,51 +225,10 @@ current_tool_invocation = contextvars.ContextVar("current_tool_invocation", defa
 evaluating_wait_condition = contextvars.ContextVar("evaluating_wait_condition", default=False)
 
 
-def _normalize_native_response_input(value, *, top_level=False):
-    """Build an API-compatible replay copy without changing durable history."""
-
-    if isinstance(value, dict):
-        item_type = value.get("type") if top_level else None
-        normalized = {}
-        for key, item in value.items():
-            if item is None:
-                continue
-            if (
-                top_level
-                and key == "status"
-                and item_type in {"message", "reasoning", "function_call"}
-            ):
-                continue
-            normalized[key] = _normalize_native_response_input(item)
-        return normalized
-    if isinstance(value, list):
-        return [
-            _normalize_native_response_input(item, top_level=isinstance(item, dict))
-            for item in value
-        ]
-    if isinstance(value, tuple):
-        return [
-            _normalize_native_response_input(item, top_level=isinstance(item, dict))
-            for item in value
-        ]
-    return copy.deepcopy(value)
-
-
 def create_response(**kwargs):
     if "input" in kwargs:
-        request_input = redact_persisted_value(kwargs["input"])
-        if use_native_openai:
-            request_input = _normalize_native_response_input(request_input)
-        kwargs["input"] = request_input
-    if use_reasoning_effort and REASONING_EFFORT:
-        kwargs.setdefault("reasoning", {"effort": REASONING_EFFORT})
-    if use_native_openai:
-        kwargs.setdefault("store", False)
-        include = list(kwargs.pop("include", []) or [])
-        if "reasoning.encrypted_content" not in include:
-            include.append("reasoning.encrypted_content")
-        kwargs["include"] = include
-    return client.responses.create(**kwargs)
+        kwargs["input"] = redact_persisted_value(kwargs["input"])
+    return client.create(**kwargs)
 
 
 def slugify_heading(title):
@@ -1382,62 +1342,6 @@ def normalize_compaction_summary(summary):
     return validate_compaction_summary(summary)
 
 
-def response_output_items(response):
-    items = getattr(response, "output", None) or []
-    output = []
-    for item in items:
-        if isinstance(item, dict):
-            output.append(copy.deepcopy(item))
-        elif hasattr(item, "model_dump"):
-            output.append(item.model_dump(mode="json", exclude_none=False))
-        else:
-            output.append(json.loads(json.dumps(item, default=str)))
-    text = getattr(response, "output_text", None)
-    has_output_text = any(
-        isinstance(item, dict)
-        and item.get("type") == "message"
-        and any(
-            isinstance(part, dict) and part.get("type") == "output_text"
-            for part in (item.get("content") or [])
-        )
-        for item in output
-    )
-    if text and not has_output_text:
-        # Some Responses-compatible providers expose assistant text only on
-        # output_text, even when response.output contains reasoning metadata.
-        # Normalize it into the provider-neutral replay envelope without
-        # replacing or mutating the provider's exact output items.
-        output.append(
-            {
-                "type": "message",
-                "role": "assistant",
-                "content": [
-                    {
-                        "type": "output_text",
-                        "text": str(text),
-                        "annotations": [],
-                    }
-                ],
-            }
-        )
-    return output
-
-
-def response_text(response):
-    text = getattr(response, "output_text", None)
-    if text:
-        return text
-
-    pieces = []
-    for item in response_output_items(response):
-        if item.get("type") != "message":
-            continue
-        for part in item.get("content") or []:
-            if part.get("type") == "output_text":
-                pieces.append(part.get("text", ""))
-    return "".join(pieces)
-
-
 def compaction_output_truncated(response):
     if getattr(response, "status", None) != "incomplete":
         return False
@@ -1455,7 +1359,7 @@ def request_compaction_summary(send, request, label):
     A response cut off at max_output_tokens is retried with a larger budget,
     up to COMPACT_MAX_TOKENS_CEILING, instead of counting as a failure.
     """
-    if use_reasoning_effort and COMPACT_REASONING_EFFORT:
+    if COMPACT_REASONING_EFFORT:
         request["reasoning"] = {"effort": COMPACT_REASONING_EFFORT}
     attempts = [copy.deepcopy(request)]
     fallback_request = copy.deepcopy(request)
@@ -1503,9 +1407,7 @@ def generate_compaction_summary(turns_to_summarize, previous_summary=None):
             {"role": "user", "content": build_summary_prompt(turns_to_summarize, previous_summary)},
         ],
         "max_output_tokens": COMPACT_MAX_TOKENS,
-    }
-    if use_native_openai:
-        request["text"] = {
+        "text": {
             "format": {
                 "type": "json_schema",
                 "name": COMPACTION_SCHEMA_VERSION,
@@ -1513,7 +1415,8 @@ def generate_compaction_summary(turns_to_summarize, previous_summary=None):
                 "schema": COMPACTION_JSON_SCHEMA,
                 "strict": True,
             }
-        }
+        },
+    }
     return request_compaction_summary(
         lambda attempt: create_response(**attempt), request, "Compaction summary"
     )
@@ -1603,6 +1506,16 @@ def build_compaction_summary_message(summary_body):
     }
 
 
+def kept_after_compaction(item):
+    """Whether an item in the turns that compaction keeps stays in context.
+
+    Claude binds each thinking block to the conversation before it. Replayed
+    after a summary, a kept turn's thinking no longer matches, and the API
+    would drop it and every thinking block after it, so it is left out.
+    """
+    return getattr(client, "provider", None) != "anthropic" or item.get("type") != "reasoning"
+
+
 def compact_messages(messages, force=False, reason="threshold", summary_func=None):
     if not messages:
         return messages
@@ -1644,10 +1557,15 @@ def compact_messages(messages, force=False, reason="threshold", summary_func=Non
     except Exception as exc:
         summary_body = build_fallback_summary(turns_to_summarize, exc, previous_summary)
 
+    tail = [
+        index
+        for index in range(tail_start, len(messages))
+        if kept_after_compaction(messages[index])
+    ]
     summary_message = build_compaction_summary_message(summary_body)
     compacted = copy.deepcopy(messages[:head_end])
     compacted.append(summary_message)
-    compacted.extend(copy.deepcopy(messages[tail_start:]))
+    compacted.extend(copy.deepcopy(messages[index]) for index in tail)
 
     after_tokens = estimate_messages_tokens(compacted)
     compaction_record = {
@@ -1659,14 +1577,14 @@ def compact_messages(messages, force=False, reason="threshold", summary_func=Non
         "before_tokens_estimate": active_tokens,
         "after_tokens_estimate": after_tokens,
         "head_messages": head_end,
-        "tail_messages": len(messages) - tail_start,
+        "tail_messages": len(tail),
     }
     store, session_id = active_session_store()
     if store is not None:
         before_ids = list(session_runtime["active_item_ids"])
         if len(before_ids) != len(messages):
             raise RuntimeError("Persistent active item IDs are not aligned for compaction.")
-        retained_ids = before_ids[:head_end] + before_ids[tail_start:]
+        retained_ids = before_ids[:head_end] + [before_ids[index] for index in tail]
         summary_item_id, _checkpoint_id, _compaction_id, after_ids = (
             store.append_compaction_and_checkpoint(
                 session_id,
@@ -1691,19 +1609,6 @@ def compact_messages(messages, force=False, reason="threshold", summary_func=Non
         f"{len(messages)} -> {len(compacted)} messages"
     )
     return compacted
-
-
-def is_context_window_error(exc):
-    text = str(exc).lower()
-    needles = (
-        "context window",
-        "context length",
-        "maximum context",
-        "too many tokens",
-        "token limit",
-        "context_length_exceeded",
-    )
-    return any(needle in text for needle in needles)
 
 
 @contextlib.contextmanager
@@ -2414,9 +2319,7 @@ def generate_recursive_compaction_summary(frame, turns_to_summarize, previous_su
             },
         ],
         "max_output_tokens": COMPACT_MAX_TOKENS,
-    }
-    if use_native_openai:
-        request["text"] = {
+        "text": {
             "format": {
                 "type": "json_schema",
                 "name": COMPACTION_SCHEMA_VERSION,
@@ -2424,7 +2327,8 @@ def generate_recursive_compaction_summary(frame, turns_to_summarize, previous_su
                 "schema": COMPACTION_JSON_SCHEMA,
                 "strict": True,
             }
-        }
+        },
+    }
     return request_compaction_summary(
         lambda attempt: _recursive_compaction_request(frame, attempt)[0],
         request,
@@ -2470,10 +2374,14 @@ def compact_recursive_frame(frame, force=False, reason="threshold"):
     summary_message = build_recursive_compaction_summary_message(
         summary, frame.recursive_call_id
     )
-    retained_ids = (
-        list(frame.active_item_ids[:head_end])
-        + list(frame.active_item_ids[tail_start:])
-    )
+    tail = [
+        index
+        for index in range(tail_start, len(messages))
+        if kept_after_compaction(messages[index])
+    ]
+    retained_ids = list(frame.active_item_ids[:head_end]) + [
+        frame.active_item_ids[index] for index in tail
+    ]
     store, _session_id = _recursive_store()
     summary_ids = store.append_recursive_tool_bundle(
         frame.recursive_call_id,
@@ -2485,7 +2393,7 @@ def compact_recursive_frame(frame, force=False, reason="threshold"):
     frame.messages = (
         copy.deepcopy(messages[:head_end])
         + [copy.deepcopy(summary_message)]
-        + copy.deepcopy(messages[tail_start:])
+        + [copy.deepcopy(messages[index]) for index in tail]
     )
     frame.active_item_ids = (
         retained_ids[:head_end] + summary_ids + retained_ids[head_end:]
@@ -2815,22 +2723,14 @@ def configure_recursion_config(config=None):
 
 
 def configure_model_client(provider, model, reasoning=None):
-    global client, MODEL, REASONING_EFFORT, use_reasoning_effort, use_native_openai
-    MODEL = model
-    if provider == "ollama":
-        client = OpenAI(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_API_KEY)
-        use_reasoning_effort = False
-        use_native_openai = False
-        return
-    if provider != "openai":
-        raise ValueError(f"Unsupported saved provider: {provider!r}")
-    client = OpenAI()
-    use_reasoning_effort = True
-    use_native_openai = True
+    global client, MODEL
+    effort = REASONING_EFFORT
     if isinstance(reasoning, dict):
-        REASONING_EFFORT = str(reasoning.get("effort") or "").strip()
+        effort = str(reasoning.get("effort") or "").strip()
     elif reasoning is not None:
-        REASONING_EFFORT = str(reasoning).strip()
+        effort = str(reasoning).strip()
+    client = llm_client.connect(provider, reasoning_effort=effort or None, trace=trace_tool)
+    MODEL = model
 
 
 def restore_compact_configuration(config):
@@ -3099,12 +2999,19 @@ def build_parser():
     )
     parser.add_argument("--no-tool-trace", action="store_true", help="Do not print model tool calls to stderr.")
     parser.add_argument("--ollama", action="store_true", help=f"Use local Ollama at {OLLAMA_BASE_URL} with {OLLAMA_MODEL}.")
-    parser.add_argument("--model", default=None, help="Override the model for a new session.")
+    parser.add_argument(
+        "--model",
+        default=None,
+        help=(
+            "Override the model for a new session. A Claude model such as "
+            "claude-sonnet-5-5 runs on the Anthropic API (ANTHROPIC_API_KEY)."
+        ),
+    )
     parser.add_argument(
         "--reasoning-effort",
         default=None,
         choices=("none", "minimal", "low", "medium", "high", "xhigh"),
-        help="OpenAI reasoning effort for a new session.",
+        help="Reasoning effort for a new session (Claude's effort level for Claude models).",
     )
     parser.add_argument("--cryosparc-url", default=None)
     parser.add_argument(
@@ -3222,8 +3129,8 @@ def main(argv=None):
                 store.set_status(session_id, "running")
                 run_agent(prompt, developer_instructions=developer)
         else:
-            provider = "ollama" if args.ollama else "openai"
             model = args.model or (OLLAMA_MODEL if args.ollama else MODEL)
+            provider = "ollama" if args.ollama else llm_client.provider_for_model(model)
             reasoning_effort = None if args.ollama else (args.reasoning_effort or REASONING_EFFORT)
             recursion_config = configure_recursion_config(
                 {

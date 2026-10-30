@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import harness
+import llm_client
 
 
 def structured_summary(**overrides):
@@ -402,17 +403,11 @@ class CompactionSummaryRequestTests(unittest.TestCase):
             name: getattr(harness, name)
             for name in (
                 "TRACE_TOOLS",
-                "REASONING_EFFORT",
-                "use_reasoning_effort",
-                "use_native_openai",
                 "COMPACT_MAX_TOKENS",
                 "COMPACT_REASONING_EFFORT",
             )
         }
         harness.TRACE_TOOLS = False
-        harness.REASONING_EFFORT = "xhigh"
-        harness.use_reasoning_effort = True
-        harness.use_native_openai = False
         harness.COMPACT_MAX_TOKENS = 16000
         harness.COMPACT_REASONING_EFFORT = "low"
 
@@ -423,8 +418,11 @@ class CompactionSummaryRequestTests(unittest.TestCase):
 
     def test_create_response_keeps_an_explicit_reasoning_effort(self):
         calls = []
-        fake_client = SimpleNamespace(
-            responses=SimpleNamespace(create=lambda **kwargs: calls.append(kwargs))
+        fake_client = llm_client.OpenAIResponsesClient(
+            SimpleNamespace(
+                responses=SimpleNamespace(create=lambda **kwargs: calls.append(kwargs))
+            ),
+            reasoning_effort="xhigh",
         )
         with mock.patch.object(harness, "client", fake_client):
             harness.create_response(model="m", input=[])
