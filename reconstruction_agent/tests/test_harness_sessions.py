@@ -642,7 +642,7 @@ class HarnessSessionTests(unittest.TestCase):
             )
         expected_db = Path("/tmp/session db.sqlite3").expanduser().resolve()
         self.assertIn(
-            f"python harness.py --session-db '{expected_db}' --resume session123",
+            f"python reconstruction_agent/harness.py --session-db '{expected_db}' --resume session123",
             output.getvalue(),
         )
 

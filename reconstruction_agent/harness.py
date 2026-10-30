@@ -96,11 +96,13 @@ session_runtime = {
         "max_model_turns": RLM_MAX_MODEL_TURNS,
     },
 }
-# Processing guides the agent can load. Select one with CRYOEM_GUIDE (or
-# --processing-guide); a path to another Markdown guide also works.
+# Processing guides the agent can load, in guides/. Select one with
+# CRYOEM_GUIDE (or --processing-guide); a path to another Markdown guide
+# also works.
+GUIDES_DIR = Path(__file__).with_name("guides")
 CRYOEM_GUIDES = {
-    "original": Path(__file__).with_name("cryoem-data-processing.md"),
-    "v5": Path(__file__).with_name("cryoem-data-processing-v5.md"),
+    "original": GUIDES_DIR / "cryoem-data-processing.md",
+    "experimental": GUIDES_DIR / "self-evolution-summary.md",
 }
 DEFAULT_CRYOEM_GUIDE = "original"
 
@@ -2929,7 +2931,7 @@ def recover_interrupted_recursive_calls(store, session_id):
 def print_session_resume(session_id, *, store=None, saved=True):
     label = "Session saved" if saved else "Session ID"
     print(f"{label}: {session_id}")
-    command = "python harness.py"
+    command = "python reconstruction_agent/harness.py"
     if store is not None:
         database_path = store.path
         if str(database_path) != ":memory:":
@@ -3018,7 +3020,7 @@ def build_parser():
         "--processing-guide",
         default=None,
         help=(
-            "Processing guide to load: 'original', 'v5', or a path to a .md file "
+            "Processing guide to load: 'original', 'experimental', or a path to a .md file "
             f"(default: $CRYOEM_GUIDE or {DEFAULT_CRYOEM_GUIDE!r})."
         ),
     )

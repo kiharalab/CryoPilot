@@ -10,24 +10,26 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .config import REPO_ROOT
+from .config import RECONSTRUCTION_AGENT_ROOT
 
+GUIDES_DIR = RECONSTRUCTION_AGENT_ROOT / "guides"
 GUIDE_FILES = {
     "original": "cryoem-data-processing.md",
-    "v5": "cryoem-data-processing-v5.md",
+    "experimental": "self-evolution-summary.md",
 }
 DEFAULT_GUIDE = "original"
 GUIDE_LABELS = {
     "original": "General guide",
-    "v5": "CryoSPARC v5 guide",
+    "experimental": "Self-evolution summary (experimental)",
 }
 GUIDE_DESCRIPTIONS = {
     "original": (
         "A target-agnostic framework for single-particle processing: start from the biology, "
         "then let diagnostics choose each processing branch."
     ),
-    "v5": (
-        "The same framework written for CryoSPARC v5.0, with v5 job and parameter names and "
+    "experimental": (
+        "The summary that self-evolution will update from completed runs. For now it is the "
+        "general framework written for CryoSPARC v5.0, with v5 job and parameter names and "
         "starting values the agent checks against the installed job specifications."
     ),
 }
@@ -36,7 +38,7 @@ GUIDE_DESCRIPTIONS = {
 def guide_path(guide_id: str) -> Path:
     if guide_id not in GUIDE_FILES:
         raise KeyError(guide_id)
-    return REPO_ROOT / GUIDE_FILES[guide_id]
+    return GUIDES_DIR / GUIDE_FILES[guide_id]
 
 
 def normalize(guide_id: str | None) -> str:

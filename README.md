@@ -36,15 +36,16 @@ You can use both agents from a local web application or from the terminal.
 
 | Path | What it holds |
 | --- | --- |
-| [`harness.py`](./harness.py) | The reconstruction agent: model loop, context compaction, checkpoints, and command-line entry point. |
-| [`cryosparc_repl.py`](./cryosparc_repl.py) | The persistent Python session and CryoSPARC helper functions that the reconstruction agent works in. |
-| [`session_store.py`](./session_store.py) | SQLite storage for reconstruction sessions, so that a run can be stopped and resumed. |
-| [`startup_cli.py`](./startup_cli.py) | Terminal prompts that collect the dataset description for a new reconstruction session. |
-| [`setup.sh`](./setup.sh) | Creates the Python environments, builds VESPER and the web frontend, and checks the external programs. |
-| [`cryoem-data-processing.md`](./cryoem-data-processing.md), [`cryoem-data-processing-v5.md`](./cryoem-data-processing-v5.md) | The cryo-EM processing guides that the reconstruction agent searches. |
+| [`reconstruction_agent/harness.py`](./reconstruction_agent/harness.py) | The reconstruction agent: model loop, context compaction, checkpoints, and command-line entry point. |
+| [`reconstruction_agent/cryosparc_repl.py`](./reconstruction_agent/cryosparc_repl.py) | The persistent Python session and CryoSPARC helper functions that the reconstruction agent works in. |
+| [`reconstruction_agent/llm_client.py`](./reconstruction_agent/llm_client.py) | The model clients for the OpenAI and Anthropic APIs that the reconstruction agent calls. |
+| [`reconstruction_agent/session_store.py`](./reconstruction_agent/session_store.py) | SQLite storage for reconstruction sessions, so that a run can be stopped and resumed. |
+| [`reconstruction_agent/startup_cli.py`](./reconstruction_agent/startup_cli.py) | Terminal prompts that collect the dataset description for a new reconstruction session. |
+| [`reconstruction_agent/guides/`](./reconstruction_agent/guides) | The cryo-EM processing guides that the reconstruction agent searches: the general guide and the experimental self-evolution summary. |
+| [`reconstruction_agent/tests/`](./reconstruction_agent/tests) | Unit tests for the reconstruction agent. |
 | [`modeling_agent/`](./modeling_agent) | The modeling agent, its tools, the vendored DAQ model, and its tests. |
 | [`app/`](./app) | The local web application (FastAPI server and React frontend) for both agents. |
-| [`tests/`](./tests) | Unit tests for the reconstruction agent. |
+| [`setup.sh`](./setup.sh) | Creates the Python environments, builds VESPER and the web frontend, and checks the external programs. |
 
 # System requirements
 
@@ -187,7 +188,7 @@ Then, from the CryoPilot folder:
 ```bash
 source .venv/bin/activate
 export OPENAI_API_KEY=sk-...
-python harness.py
+python reconstruction_agent/harness.py
 ```
 
 Answer the prompts as follows:
@@ -265,15 +266,15 @@ From source, use `python app/serve.py start --lan` and so on. The connection is 
 ## Reconstruction agent from the terminal
 
 ```bash
-python harness.py                          # start a new session; prompts for the dataset
-python harness.py --resume SESSION_ID      # resume a stopped session
+python reconstruction_agent/harness.py                          # start a new session; prompts for the dataset
+python reconstruction_agent/harness.py --resume SESSION_ID      # resume a stopped session
 ```
 
 The prompts ask for your CryoSPARC login, a project title and parent directory, the dataset kind (`movies`, `micrographs`, or `particles`), server-visible paths, pixel size, accelerating voltage, spherical aberration, total exposure dose, an optional gain reference and defect file, an optional sample description, the expected particle diameter, an optional molecular mass, and a scientific objective in your own words. Useful options:
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--processing-guide original\|v5\|PATH` | `original` | Processing guide the agent searches. |
+| `--processing-guide original\|experimental\|PATH` | `original` | Processing guide the agent searches: `original` is the general guide, `experimental` the self-evolution summary. |
 | `--model` | `gpt-5.5` | Model for a new session (also `OPENAI_MODEL`). A Claude model such as `claude-sonnet-5-5` runs on the Anthropic API and needs `ANTHROPIC_API_KEY`. |
 | `--reasoning-effort` | `xhigh` | Reasoning setting for a new session (also `REASONING_EFFORT`). For Claude models it sets the effort level; `none` and `minimal` become `low`. |
 | `--cryosparc-url`, `--cryosparc-email` | prompted | CryoSPARC login. The password is prompted or read from `CRYOSPARC_PASSWORD`. |
@@ -307,15 +308,15 @@ Credentials come from the environment or from the web application. The web appli
 
 1. Download the datasets from EMPIAR under the accession codes in Extended Data Table 1 of the paper.
 2. Download the data package from <https://kiharalab.org/CryoPilot/cryopilot_data.tar.gz>. For each reconstruction run it holds the reported maps, the CryoSPARC job records, and the complete agent session; for each modeling run it holds the inputs and every file the agent wrote. `index.md` inside the package describes the layout.
-3. Run each reconstruction with `python harness.py` and the dataset parameters recorded in that run's `session.json` in the package. Run each modeling job with the map, resolution, and sequences in its `inputs/` folder. The default model and reasoning settings are the ones used in the paper.
+3. Run each reconstruction with `python reconstruction_agent/harness.py` and the dataset parameters recorded in that run's `session.json` in the package. Run each modeling job with the map, resolution, and sequences in its `inputs/` folder. The default model and reasoning settings are the ones used in the paper.
 
 Language-model outputs are not deterministic, so a new run takes its own processing route. The session records in the data package let you check each decision in the reported runs.
 
 # Tests
 
 ```bash
-python -m unittest discover -s tests                         # reconstruction agent: 134 tests, about 2 s
-python -m pytest app/tests                                   # web application: 108 tests (needs pytest and httpx)
+python -m pytest reconstruction_agent/tests                  # reconstruction agent: 146 tests, about 4 s (needs pytest)
+python -m pytest app/tests                                   # web application: 123 tests (needs pytest and httpx)
 cd modeling_agent && uv run python -m unittest discover -s tests   # modeling agent: 78 tests, about 5 s
 ```
 

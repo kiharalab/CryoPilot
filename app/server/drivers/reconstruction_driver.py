@@ -28,10 +28,11 @@ from pathlib import Path
 
 DRIVER_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DRIVER_DIR.parent.parent.parent
+RECONSTRUCTION_ROOT = REPO_ROOT / "reconstruction_agent"
 # A compiled build has these modules built in, and the paths would point
 # outside it (to the home folder, where stray .py files could be imported).
 if "__compiled__" not in globals():
-    sys.path.insert(0, str(REPO_ROOT))
+    sys.path.insert(0, str(RECONSTRUCTION_ROOT))
     sys.path.insert(0, str(DRIVER_DIR))
 
 from protocol import CommandReader, Emitter, redirect_stdout_to_stderr  # noqa: E402

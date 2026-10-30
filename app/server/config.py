@@ -19,6 +19,7 @@ PACKAGED = "__compiled__" in globals()
 
 APP_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = APP_DIR.parent
+RECONSTRUCTION_AGENT_ROOT = REPO_ROOT if PACKAGED else REPO_ROOT / "reconstruction_agent"
 MODELING_AGENT_ROOT = REPO_ROOT if PACKAGED else REPO_ROOT / "modeling_agent"
 FRONTEND_DIR = APP_DIR / "frontend"
 FRONTEND_DIST = FRONTEND_DIR / "dist"

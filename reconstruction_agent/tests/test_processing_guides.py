@@ -15,9 +15,9 @@ class ProcessingGuideSelectionTests(unittest.TestCase):
             )
 
     def test_environment_and_argument_select_a_guide(self):
-        with mock.patch.dict(os.environ, {"CRYOEM_GUIDE": "v5"}):
+        with mock.patch.dict(os.environ, {"CRYOEM_GUIDE": "experimental"}):
             self.assertEqual(
-                harness.resolve_cryoem_guide(), harness.CRYOEM_GUIDES["v5"]
+                harness.resolve_cryoem_guide(), harness.CRYOEM_GUIDES["experimental"]
             )
             self.assertEqual(
                 harness.resolve_cryoem_guide("original"),
@@ -28,7 +28,7 @@ class ProcessingGuideSelectionTests(unittest.TestCase):
             Path("~/notes/guide.md").expanduser(),
         )
         with self.assertRaisesRegex(ValueError, "Unknown processing guide"):
-            harness.resolve_cryoem_guide("v6")
+            harness.resolve_cryoem_guide("v5")
 
     def test_every_bundled_guide_loads_with_sections(self):
         for name, path in harness.CRYOEM_GUIDES.items():

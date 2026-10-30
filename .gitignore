@@ -4,7 +4,7 @@
 /*/
 !/app/
 !/modeling_agent/
-!/tests/
+!/reconstruction_agent/
 /*.png
 /*.jpg
 /*.jpeg

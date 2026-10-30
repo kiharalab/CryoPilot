@@ -152,7 +152,7 @@ export function ModelChip({ model, effort, onModelChange, onEffortChange, defaul
   )
 }
 
-export const GUIDE_LABELS = { original: 'General guide', v5: 'CryoSPARC v5 guide' }
+export const GUIDE_LABELS = { original: 'General guide', experimental: 'Self-evolution summary (experimental)' }
 
 /**
  * Processing guide for one reconstruction session.

@@ -14,8 +14,9 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+for path in (REPO_ROOT, REPO_ROOT / "reconstruction_agent"):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 from app.server import modeling_toolchain  # noqa: E402
 from app.server.manifests import ManifestError, build_agent_config, build_manifest, compose_modeling_request  # noqa: E402

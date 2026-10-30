@@ -11,10 +11,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .config import REPO_ROOT
+from .config import RECONSTRUCTION_AGENT_ROOT
 
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+if str(RECONSTRUCTION_AGENT_ROOT) not in sys.path:
+    sys.path.insert(0, str(RECONSTRUCTION_AGENT_ROOT))
 
 from llm_client import PROVIDERS, provider_for_model  # noqa: E402
 from startup_cli import DATASET_KINDS, MANIFEST_SCHEMA_VERSION, WORKSPACE_TITLE  # noqa: E402

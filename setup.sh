@@ -128,7 +128,7 @@ cat <<EOF
 Start the web application:
     .venv/bin/python app/serve.py
 Or run the agents from the terminal:
-    .venv/bin/python harness.py
+    .venv/bin/python reconstruction_agent/harness.py
     cd modeling_agent && uv run python modeller.py "..."
 Both agents need OPENAI_API_KEY in the environment.
 EOF

@@ -1,4 +1,4 @@
-// Attach a reconstruction started from the terminal (python harness.py) to
+// Attach a reconstruction started from the terminal (python reconstruction_agent/harness.py) to
 // the current project, so its transcript, maps, and jobs show up here.
 import { useEffect, useMemo, useState } from 'react'
 import { Search, Terminal } from 'lucide-react'
@@ -104,7 +104,7 @@ export function ImportSessionDialog({ open, onOpenChange }) {
       <DialogContent
         title="Import a terminal session"
         description={
-          project ? `Reconstructions started with python harness.py on this computer. Importing one adds it to ${project.title}.` : undefined
+          project ? `Reconstructions started with python reconstruction_agent/harness.py on this computer. Importing one adds it to ${project.title}.` : undefined
         }
         width="max-w-2xl"
         className="h-[min(640px,84vh)]"
@@ -140,7 +140,7 @@ export function ImportSessionDialog({ open, onOpenChange }) {
               </div>
             ) : !sessions.length ? (
               <EmptyState icon={Terminal} title="No terminal sessions on this computer">
-                Reconstructions you start with <code className="font-mono text-[12.5px]">python harness.py</code> appear here, and you can follow them in
+                Reconstructions you start with <code className="font-mono text-[12.5px]">python reconstruction_agent/harness.py</code> appear here, and you can follow them in
                 CryoPilot after importing.
               </EmptyState>
             ) : !filtered.length ? (

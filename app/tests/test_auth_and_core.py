@@ -312,7 +312,7 @@ def _resume_fixture(monkeypatch, sandbox, *, provider: str | None):
 
 
 def test_resume_uses_the_default_guide_and_reports_a_failed_start(client, monkeypatch, sandbox):
-    store.set_setting("processing_guide", "v5")
+    store.set_setting("processing_guide", "experimental")
     try:
         session, key_checks, started = _resume_fixture(monkeypatch, sandbox, provider="ollama")
         events = bus.subscribe(session["id"])
@@ -358,10 +358,10 @@ def test_resume_of_a_claude_session_requires_the_anthropic_key(client, monkeypat
 def test_import_records_a_given_guide(client, monkeypatch):
     project = make_project("Import guide")
     monkeypatch.setattr(main.trace_reader, "session", lambda harness_id: {"manifest": {}, "project_uid": "P1", "workspace_uid": "W1"})
-    imported = client.post(f"/api/projects/{project['id']}/sessions/reconstruction/import", json={"harness_session_id": "h-guide", "processing_guide": "v5"})
+    imported = client.post(f"/api/projects/{project['id']}/sessions/reconstruction/import", json={"harness_session_id": "h-guide", "processing_guide": "experimental"})
     assert imported.status_code == 200, imported.text
-    assert imported.json()["config"]["processing_guide"] == "v5"
-    refused = client.post(f"/api/projects/{project['id']}/sessions/reconstruction/import", json={"harness_session_id": "h-guide-2", "processing_guide": "v9"})
+    assert imported.json()["config"]["processing_guide"] == "experimental"
+    refused = client.post(f"/api/projects/{project['id']}/sessions/reconstruction/import", json={"harness_session_id": "h-guide-2", "processing_guide": "v5"})
     assert refused.status_code == 422
 
 
@@ -371,8 +371,8 @@ def test_each_agent_gets_only_its_own_account():
     assert "OPENAI_API_KEY" in modeling and "CRYOZETA_PASSWORD" in modeling
     assert not any(name.startswith("CRYOSPARC_") for name in modeling)
     assert "ANTHROPIC_API_KEY" not in modeling
-    reconstruction = driver_env("reconstruction", guide="v5")
-    assert reconstruction["CRYOEM_GUIDE"] == "v5" and "CRYOSPARC_PASSWORD" in reconstruction
+    reconstruction = driver_env("reconstruction", guide="experimental")
+    assert reconstruction["CRYOEM_GUIDE"] == "experimental" and "CRYOSPARC_PASSWORD" in reconstruction
     assert "ANTHROPIC_API_KEY" in reconstruction
     assert not any(name.startswith("CRYOZETA_") for name in reconstruction)
 

@@ -2,7 +2,7 @@
 
 A local web interface for the two agents in this repository:
 
-- **Reconstruction**: drives `harness.py` (CryoSPARC single-particle processing).
+- **Reconstruction**: drives `reconstruction_agent/harness.py` (CryoSPARC single-particle processing).
 - **Modeling**: drives the modeling agent in `modeling_agent/` (CryoZeta model building, VESPER fitting
   and handedness checks, Q-scores, residue-wise DAQ, Phenix and Rosetta refinement, and PyMOL overlays).
 
@@ -82,8 +82,9 @@ credentials when it starts, so stop and resume a running session after you chang
 
 ### Processing guides
 
-The reconstruction agent follows one of two processing guides: the general guide
-(`cryoem-data-processing.md`, the default) or the CryoSPARC v5 guide (`cryoem-data-processing-v5.md`).
+The reconstruction agent follows one of two processing guides in `reconstruction_agent/guides/`: the general guide
+(`cryoem-data-processing.md`, the default) or the experimental self-evolution summary
+(`self-evolution-summary.md`), which is for now the general framework written for CryoSPARC v5.0.
 Choose the default in **Settings → Reconstruction**, or for one session in the new-reconstruction
 screen. The server passes the choice to the agent as `CRYOEM_GUIDE`, the variable `harness.py` reads.
 A session keeps its guide when it is resumed; a session imported from the terminal resumes with the
