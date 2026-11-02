@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
 import anthropic
+import openai
 from fastapi import APIRouter, Request
 
 from . import cryosparc_bridge, cryozeta_bridge, guides, modeling_toolchain
@@ -32,8 +30,6 @@ from .state import (
 )
 
 router = APIRouter()
-
-OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
 
 # Accepting a different license (a new ID) asks everyone to accept again.
 LICENSE_ID = "PolyForm-Noncommercial-1.0.0"
@@ -217,17 +213,15 @@ def test_openai() -> dict[str, Any]:
     key = openai_key()
     if not key:
         raise api_error(400, "Enter an OpenAI API key first.")
-    request = urllib.request.Request(OPENAI_MODELS_URL, headers={"Authorization": f"Bearer {key}"})
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        if exc.code == 401:
-            raise api_error(502, "OpenAI rejected this API key.")
-        raise api_error(502, f"OpenAI returned HTTP {exc.code}.")
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise api_error(502, f"Could not reach OpenAI: {getattr(exc, 'reason', exc)}")
-    models = sorted(str(entry.get("id")) for entry in payload.get("data") or [] if entry.get("id"))
+        models = sorted(model.id for model in openai.OpenAI(api_key=key, timeout=20).models.list())
+    except openai.AuthenticationError:
+        raise api_error(502, "OpenAI rejected this API key.")
+    except openai.APIStatusError as exc:
+        raise api_error(502, f"OpenAI returned HTTP {exc.status_code}.")
+    except openai.APIConnectionError as exc:
+        # The SDK's own text is only "Connection error."; the cause says why.
+        raise api_error(502, f"Could not reach OpenAI: {exc.__cause__ or exc}")
     default = defaults()["reconstruction_model"]
     return {"ok": True, "model_count": len(models), "default_model_available": default in models, "models": models}
 

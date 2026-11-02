@@ -6,11 +6,14 @@ Run from the repository root:
 
 from __future__ import annotations
 
+import json
 import os
 import queue
 import socket
 import stat
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -28,7 +31,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from starlette.websockets import WebSocketDisconnect  # noqa: E402
 
 from app import serve  # noqa: E402
-from app.server import auth, files, main, processes as processes_module  # noqa: E402
+from app.server import auth, files, main, processes as processes_module, routes_setup  # noqa: E402
 from app.server.credentials import Credentials  # noqa: E402
 from app.server.main import app  # noqa: E402
 from app.server import state  # noqa: E402
@@ -363,6 +366,85 @@ def test_import_records_a_given_guide(client, monkeypatch):
     assert imported.json()["config"]["processing_guide"] == "experimental"
     refused = client.post(f"/api/projects/{project['id']}/sessions/reconstruction/import", json={"harness_session_id": "h-guide-2", "processing_guide": "v5"})
     assert refused.status_code == 422
+
+
+# ------------------------------------------------------------ connection tests
+@pytest.fixture
+def openai_api(monkeypatch):
+    """The real OpenAI SDK against a local stand-in for the API; set `status` and `body`."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            server.seen.append((self.path, self.headers.get("Authorization")))
+            body = json.dumps(server.body).encode()
+            self.send_response(server.status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.status, server.body, server.seen = 200, {"object": "list", "data": []}, []
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    sdk_client = routes_setup.openai.OpenAI
+    monkeypatch.setattr(routes_setup.openai, "OpenAI", lambda **kwargs: sdk_client(max_retries=0, **kwargs))
+    monkeypatch.setattr(routes_setup, "openai_key", lambda: "sk-made-up")
+    monkeypatch.setenv("OPENAI_BASE_URL", f"http://127.0.0.1:{server.server_port}/v1")
+    yield server
+    server.shutdown()
+    server.server_close()
+
+
+def test_openai_test_lists_the_models(client, openai_api):
+    default = defaults()["reconstruction_model"]
+    names = ["z-model", default]
+    openai_api.body = {
+        "object": "list",
+        "data": [{"id": name, "object": "model", "created": 1, "owned_by": "openai"} for name in names],
+    }
+    response = client.post("/api/settings/openai/test")
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "ok": True,
+        "model_count": 2,
+        "default_model_available": True,
+        "models": sorted(names),
+    }
+    assert openai_api.seen == [("/v1/models", "Bearer sk-made-up")]
+
+
+@pytest.mark.parametrize(
+    "status, message",
+    [(401, "OpenAI rejected this API key."), (429, "OpenAI returned HTTP 429."), (500, "OpenAI returned HTTP 500.")],
+)
+def test_openai_test_reports_what_the_api_answered(client, openai_api, status, message):
+    openai_api.status = status
+    openai_api.body = {"error": {"message": "no"}}
+    response = client.post("/api/settings/openai/test")
+    assert response.status_code == 502
+    assert response.json()["message"] == message
+
+
+def test_openai_test_says_why_it_could_not_connect(client, openai_api, monkeypatch):
+    held = socket.socket()
+    held.bind(("127.0.0.1", 0))  # Bound but not listening, so a connection is refused.
+    monkeypatch.setenv("OPENAI_BASE_URL", f"http://127.0.0.1:{held.getsockname()[1]}/v1")
+    response = client.post("/api/settings/openai/test")
+    held.close()
+    assert response.status_code == 502
+    message = response.json()["message"]
+    assert message.startswith("Could not reach OpenAI: ")
+    assert message != "Could not reach OpenAI: Connection error."
+
+
+def test_openai_test_needs_a_key(client, monkeypatch):
+    monkeypatch.setattr(routes_setup, "openai_key", lambda: "")
+    response = client.post("/api/settings/openai/test")
+    assert response.status_code == 400
+    assert response.json()["message"] == "Enter an OpenAI API key first."
 
 
 # ---------------------------------------------------------- agent environments
