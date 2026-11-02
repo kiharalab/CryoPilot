@@ -18,6 +18,8 @@ except (ModuleNotFoundError, ImportError):
         os.execv(str(venv_python), [str(venv_python), str(Path(__file__).resolve()), *sys.argv[1:]])
     raise
 
+sys.path.insert(0, str(APP_ROOT.parent / "reconstruction_agent"))
+
 from agents.exceptions import (InputGuardrailTripwireTriggered, MaxTurnsExceeded, ModelRefusalError,
                                OutputGuardrailTripwireTriggered, UserError)
 from agents.items import ToolCallItem, ToolCallOutputItem
@@ -27,6 +29,8 @@ from openai.types.responses import (
     ResponseTextDeltaEvent,
 )
 
+from claude_model import agent_model, api_key_name
+from llm_client import ModelRefusal
 from prompts import SYSTEM_PROMPT
 from tools import ALL_TOOLS, ROOT
 
@@ -140,7 +144,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-NON_RETRYABLE = (MaxTurnsExceeded, UserError, ModelRefusalError, InputGuardrailTripwireTriggered,
+NON_RETRYABLE = (MaxTurnsExceeded, UserError, ModelRefusalError, ModelRefusal, InputGuardrailTripwireTriggered,
                  OutputGuardrailTripwireTriggered, KeyboardInterrupt, asyncio.CancelledError)
 
 
@@ -164,12 +168,13 @@ async def _stream(stream, trace: "TerminalTrace") -> None:
 
 
 async def run(request: str) -> str:
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
-        raise RuntimeError("OPENAI_API_KEY is not set.")
+    key_name = api_key_name(MODEL)
+    if not os.environ.get(key_name, "").strip():
+        raise RuntimeError(f"{key_name} is not set.")
     agent = Agent(
         name="Cryo-EM modeling agent",
         instructions=SYSTEM_PROMPT,
-        model=MODEL,
+        model=agent_model(MODEL),
         model_settings=ModelSettings(
             reasoning={"effort": REASONING_EFFORT, "summary": "concise"},
         ),

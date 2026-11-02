@@ -12,6 +12,7 @@ import { InlineError } from '../../components/ui'
 import { AttachMenu, attachmentChip, attachmentKey, mapAttachment, mergeAttachments, uploadToModeling } from '../attachments/AttachMenu'
 import { ModelChip } from './AgentChips'
 import { SetupNotice, setupMessage } from './SetupNotice'
+import { modelService } from '../setup/services'
 
 const SUGGESTIONS = [
   {
@@ -133,7 +134,9 @@ export function NewModeling({ initialAttachments }) {
     [attach, project.id, toast],
   )
 
-  const openaiReady = Boolean(setup?.openai?.configured)
+  // The chosen model's API key: Claude models run on Anthropic.
+  const keyService = modelService(model)
+  const keyReady = Boolean(setup?.[keyService]?.configured)
   const cryozetaReady = Boolean(setup?.cryozeta?.username && setup?.cryozeta?.password_set)
   const cryosparcSignedIn = Boolean(setup?.cryosparc?.email && setup?.cryosparc?.password_set)
   const tools = setup?.modeling_tools
@@ -202,7 +205,7 @@ export function NewModeling({ initialAttachments }) {
           <h1 className="mb-6 text-center text-2xl font-semibold tracking-[-0.02em] text-fg">What should the modeling agent do?</h1>
 
           <div className="mb-3 flex flex-col gap-2 empty:hidden">
-            {!openaiReady ? <SetupNotice settingsSection="accounts">{setupMessage('openai')}</SetupNotice> : null}
+            {!keyReady ? <SetupNotice settingsSection="accounts">{setupMessage(keyService)}</SetupNotice> : null}
             {missingTools.length ? (
               <SetupNotice settingsSection="modeling">
                 {joinNames(missingTools)} {missingTools.length > 1 ? 'were' : 'was'} not found on this computer. Steps that need{' '}
@@ -224,7 +227,7 @@ export function NewModeling({ initialAttachments }) {
             value={text}
             onChange={setText}
             onSubmit={submit}
-            canSubmit={Boolean(text.trim()) && openaiReady && !pending.length}
+            canSubmit={Boolean(text.trim()) && keyReady && !pending.length}
             busy={busy}
             placeholder="Describe the model you need, or ask about one"
             attachments={chips}

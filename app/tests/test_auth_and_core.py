@@ -350,6 +350,29 @@ def test_resume_with_unknown_provider_requires_the_openai_key(client, monkeypatc
     assert key_checks == ["openai"]
 
 
+def test_a_claude_modeling_session_requires_the_anthropic_key_only(client, monkeypatch, sandbox):
+    project = make_project("Claude modeling")
+    key_checks = []
+    monkeypatch.setattr(state, "require_openai_key", lambda: key_checks.append("openai"))
+    monkeypatch.setattr(state, "anthropic_key", lambda: "")
+    body = {"prompt": "Validate the model", "model": "claude-sonnet-5-5"}
+    response = client.post(f"/api/projects/{project['id']}/sessions/modeling", json=body)
+    assert response.status_code == 400
+    assert response.json()["setup"] == "anthropic"
+    assert key_checks == []
+
+
+def test_resume_of_a_claude_modeling_session_requires_the_anthropic_key(client, monkeypatch, sandbox):
+    project = make_project("Claude modeling resume")
+    session = store.create_session(
+        project_id=project["id"], kind="modeling", title="Fit", config={"model": "claude-opus-5-5"}, status="stopped"
+    )
+    monkeypatch.setattr(state, "anthropic_key", lambda: "")
+    response = client.post(f"/api/sessions/{session['id']}/start")
+    assert response.status_code == 400
+    assert response.json()["setup"] == "anthropic"
+
+
 def test_resume_of_a_claude_session_requires_the_anthropic_key(client, monkeypatch, sandbox):
     session, key_checks, started = _resume_fixture(monkeypatch, sandbox, provider="anthropic")
     response = client.post(f"/api/sessions/{session['id']}/start")
@@ -452,7 +475,7 @@ def test_each_agent_gets_only_its_own_account():
     modeling = driver_env("modeling")
     assert "OPENAI_API_KEY" in modeling and "CRYOZETA_PASSWORD" in modeling
     assert not any(name.startswith("CRYOSPARC_") for name in modeling)
-    assert "ANTHROPIC_API_KEY" not in modeling
+    assert "ANTHROPIC_API_KEY" in modeling
     reconstruction = driver_env("reconstruction", guide="experimental")
     assert reconstruction["CRYOEM_GUIDE"] == "experimental" and "CRYOSPARC_PASSWORD" in reconstruction
     assert "ANTHROPIC_API_KEY" in reconstruction

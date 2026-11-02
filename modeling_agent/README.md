@@ -2,7 +2,8 @@
 
 A deliberately small terminal agent for cryo-EM structure modeling and model
 validation. It uses
-`gpt-5.5` and exposes these local tools:
+`gpt-5.5` by default, or a Claude model such as `claude-sonnet-5-5` with
+`MODELING_MODEL` and `ANTHROPIC_API_KEY`, and exposes these local tools:
 
 - `read_file`
 - `write_file`
@@ -216,6 +217,7 @@ CRYOPILOT_TEST_VESPER=1 CRYOPILOT_TEST_PDB=1 CRYOPILOT_TEST_QSCORE=1 CRYOPILOT_T
 ```text
 modeling_agent/
   modeller.py             terminal entry point
+  claude_model.py         Claude models through the Anthropic Messages API
   prompts.py              concise agent instructions
   tools.py                local agent tools
   cryozeta_client.py      EM-server authentication and job API client

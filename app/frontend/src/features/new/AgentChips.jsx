@@ -81,13 +81,13 @@ function Choice({ selected, onSelect, disabled, children, className }) {
 /**
  * Model and reasoning effort for one session.
  * Props: model, effort, onModelChange(model), onEffortChange(effort), defaultModel,
- * efforts (the choices; EFFORTS unless given), claude (also offer Claude models).
+ * efforts (the choices; EFFORTS unless given).
  */
-export function ModelChip({ model, effort, onModelChange, onEffortChange, defaultModel, efforts = EFFORTS, claude = false, disabled }) {
+export function ModelChip({ model, effort, onModelChange, onEffortChange, defaultModel, efforts = EFFORTS, disabled }) {
   const [open, setOpen] = useState(false)
   const [custom, setCustom] = useState('')
-  const suggestions = [...new Set([defaultModel, ...OPENAI_MODELS, ...(claude ? CLAUDE_MODELS : []), model].filter(Boolean))]
-  const customLabel = claude ? 'Another OpenAI or Claude model' : 'Another OpenAI model'
+  const suggestions = [...new Set([defaultModel, ...OPENAI_MODELS, ...CLAUDE_MODELS, model].filter(Boolean))]
+  const customLabel = 'Another OpenAI or Claude model'
 
   // A model that does not accept the chosen effort starts at Low instead.
   const chooseModel = (next) => {

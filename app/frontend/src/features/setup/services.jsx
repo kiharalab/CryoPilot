@@ -20,7 +20,7 @@ export function modelService(model) {
   return String(model || '').startsWith('claude-') ? 'anthropic' : 'openai'
 }
 
-/** Claude models the reconstruction agent can run on, most capable first. */
+/** Claude models the agents can run on, most capable first. */
 export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5']
 
 /** "CryoZeta, the Kihara Lab EM server": a service's name where a screen introduces it. */

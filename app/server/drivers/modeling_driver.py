@@ -29,6 +29,7 @@ MODELING_ROOT = REPO_ROOT / "modeling_agent"
 # outside it (to the home folder, where stray .py files could be imported).
 if "__compiled__" not in globals():
     sys.path.insert(0, str(DRIVER_DIR))
+    sys.path.insert(0, str(REPO_ROOT / "reconstruction_agent"))
     sys.path.insert(0, str(MODELING_ROOT))
 
 from protocol import CommandReader, Emitter, redirect_stdout_to_stderr  # noqa: E402
@@ -44,6 +45,7 @@ from openai.types.responses import (  # noqa: E402
     ResponseTextDeltaEvent,
 )
 
+from claude_model import agent_model, api_key_name  # noqa: E402
 from prompts import SYSTEM_PROMPT  # noqa: E402
 from tools import ALL_TOOLS, ROOT  # noqa: E402
 
@@ -104,6 +106,7 @@ class EventTrace:
         self.answer_buffer = ""
         self.tool_names: dict[str, str] = {}
         self.answer_streamed = False
+        self.answer_paused = False
 
     def reasoning_delta(self, delta: str) -> None:
         self.reasoning_buffer += delta
@@ -117,6 +120,7 @@ class EventTrace:
 
     def tool_called(self, item: ToolCallItem) -> None:
         self.reasoning_done()
+        self.answer_paused = bool(self.answer_buffer)
         name = item.tool_name or "unknown_tool"
         if item.call_id:
             self.tool_names[item.call_id] = name
@@ -136,6 +140,10 @@ class EventTrace:
 
     def answer_delta(self, delta: str) -> None:
         self.reasoning_done()
+        if self.answer_paused:
+            # Text the model wrote before a tool call stays apart from what follows it.
+            delta = "\n\n" + delta
+            self.answer_paused = False
         self.answer_streamed = True
         self.answer_buffer += delta
         emitter.emit("delta", channel="answer", text=delta)
@@ -159,7 +167,7 @@ def build_agent(model: str, effort: str, workspace: str) -> Agent:
     return Agent(
         name="Cryo-EM modeling agent",
         instructions=instructions,
-        model=model,
+        model=agent_model(model),
         model_settings=ModelSettings(reasoning={"effort": effort, "summary": "detailed"}),
         tools=ALL_TOOLS,
     )
@@ -202,9 +210,10 @@ async def run_turn(agent: Agent, session: SQLiteSession, request: str, max_turns
 
 
 async def main_async(args: argparse.Namespace) -> int:
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
-        status("error", "OPENAI_API_KEY is not set")
-        emitter.emit("error", message="OPENAI_API_KEY is not set")
+    key_name = api_key_name(args.model)
+    if not os.environ.get(key_name, "").strip():
+        status("error", f"{key_name} is not set")
+        emitter.emit("error", message=f"{key_name} is not set")
         return 1
     workspace_dir = (ROOT / args.workspace).resolve()
     workspace_dir.mkdir(parents=True, exist_ok=True)

@@ -30,7 +30,7 @@ const ACCOUNT_INFO = {
   },
   anthropic: {
     icon: KeyRound,
-    purpose: 'The reconstruction agent runs on Claude models with this key. The modeling agent runs on OpenAI models.',
+    purpose: 'Both agents run on Claude models with this key.',
   },
   cryosparc: {
     icon: Microscope,

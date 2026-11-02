@@ -315,10 +315,11 @@ class AnthropicMessagesClient:
 
     provider = "anthropic"
 
-    def __init__(self, sdk, *, reasoning_effort=None, trace=None):
+    def __init__(self, sdk, *, reasoning_effort=None, trace=None, image_max_bytes=ANTHROPIC_IMAGE_MAX_BYTES):
         self.sdk = sdk
         self.reasoning_effort = reasoning_effort
         self.trace = trace or (lambda message: None)
+        self.image_max_bytes = image_max_bytes
         self._images = {}
 
     def create(self, **request):
@@ -420,7 +421,7 @@ class AnthropicMessagesClient:
                         {
                             "type": "tool_result",
                             "tool_use_id": item.get("call_id"),
-                            "content": str(item.get("output") or ""),
+                            "content": self.tool_result_content(item.get("output")),
                         }
                     ],
                 )
@@ -447,6 +448,13 @@ class AnthropicMessagesClient:
                 else:
                     add("user", blocks)
         return "\n\n".join(part for part in system_parts if part), messages
+
+    def tool_result_content(self, output):
+        """A tool's output: text, or a list of text and images from the modeling agent's tools."""
+
+        if isinstance(output, list):
+            return self.content_blocks(output)
+        return str(output or "")
 
     def content_blocks(self, content):
         if isinstance(content, str):
@@ -487,7 +495,7 @@ class AnthropicMessagesClient:
         with Image.open(io.BytesIO(raw)) as image:
             if (
                 media_type in ANTHROPIC_IMAGE_TYPES
-                and len(raw) <= ANTHROPIC_IMAGE_MAX_BYTES
+                and len(raw) <= self.image_max_bytes
                 and max(image.size) <= ANTHROPIC_IMAGE_MAX_EDGE
             ):
                 fitted = (media_type, data)
@@ -497,7 +505,7 @@ class AnthropicMessagesClient:
                     image = image.convert("RGBA")
                 buffer = io.BytesIO()
                 image.save(buffer, format="PNG")
-                if buffer.tell() > ANTHROPIC_IMAGE_MAX_BYTES:
+                if buffer.tell() > self.image_max_bytes:
                     buffer = io.BytesIO()
                     image.convert("RGB").save(buffer, format="JPEG", quality=90)
                     fitted_type = "image/jpeg"
@@ -525,6 +533,10 @@ class AnthropicMessagesClient:
             raise RuntimeError(f"{message.model} ran out of context window space.")
 
         blocks = list(message.content)
+        # After a fallback partway through a turn, the declined attempt's thinking
+        # and tool calls are not replayed; its text is.
+        boundary = max((index for index, block in enumerate(blocks) if block.type == "fallback"), default=-1)
+        blocks = [block for index, block in enumerate(blocks) if index > boundary or block.type == "text"]
         incomplete = message.stop_reason == "max_tokens"
         if incomplete and blocks and blocks[-1].type == "tool_use":
             # Cut off while writing the call, so its arguments are incomplete.

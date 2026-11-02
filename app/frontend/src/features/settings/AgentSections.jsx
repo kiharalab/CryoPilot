@@ -70,7 +70,6 @@ export function ReconstructionSection() {
           <ModelInput
             id="settings-reconstruction-model"
             className="w-56"
-            claude
             value={defaults.reconstruction_model}
             invalid={Boolean(errors.reconstruction_model)}
             onCommit={(model) => saveModel('reconstruction_model', 'reconstruction_effort', model, defaults.reconstruction_effort)}
@@ -139,7 +138,7 @@ export function ModelingSection() {
   return (
     <>
       <SettingsGroup title="Defaults" description="New modeling sessions start with these. You can change the model and effort when you start a session.">
-        <SettingsRow title="Model" description="Any OpenAI model. Anthropic models are coming soon." htmlFor="settings-modeling-model" error={errors.modeling_model}>
+        <SettingsRow title="Model" description="Any OpenAI model, or a Claude model with an Anthropic API key." htmlFor="settings-modeling-model" error={errors.modeling_model}>
           <ModelInput
             id="settings-modeling-model"
             className="w-56"

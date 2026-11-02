@@ -658,7 +658,6 @@ export function NewReconstruction() {
                     onEffortChange={setEffort}
                     defaultModel={setup?.defaults?.reconstruction_model}
                     efforts={RECONSTRUCTION_EFFORTS}
-                    claude
                   />
                   <GuideChip guides={guides} value={guide} onChange={setGuide} defaultGuide={setup?.processing_guide} />
                 </>

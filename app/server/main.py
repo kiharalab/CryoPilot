@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from . import attachments, auth, files as file_roots, guides, modeling_toolchain
 from . import routes_cryosparc, routes_daq, routes_files, routes_setup, routes_terminal
 from .config import FRONTEND_DIST
-from .manifests import ManifestError, build_agent_config, build_manifest, compose_modeling_request
+from .manifests import ManifestError, build_agent_config, build_manifest, compose_modeling_request, provider_for_model
 from .state import (
     RECONSTRUCTION_SUPPORTED,
     REASONING_EFFORTS,
@@ -31,7 +31,6 @@ from .state import (
     processes,
     processing_guide,
     require_model_key,
-    require_openai_key,
     require_project,
     require_session,
     session_runtime_view,
@@ -255,7 +254,8 @@ def _modeling_message(project: dict[str, Any], body: dict[str, Any], workspace_r
 async def create_modeling_session(project_id: str, request: Request) -> dict[str, Any]:
     project = require_project(project_id)
     body = await request.json()
-    require_openai_key()
+    model, effort, max_turns = _modeling_options(body)
+    require_model_key(provider_for_model(model))
     file_roots.ensure_project_dirs(project["slug"])
     workspace_relative = file_roots.modeling_workspace_relative(project["slug"])
     try:
@@ -265,7 +265,6 @@ async def create_modeling_session(project_id: str, request: Request) -> dict[str
         raise api_error(422, str(exc))
     if not request_text:
         raise api_error(422, "Describe what the modeling agent should do", errors={"prompt": "Required"})
-    model, effort, max_turns = _modeling_options(body)
     first_line = str(body.get("prompt") or body.get("objective") or "").strip().splitlines()
     title = str(body.get("title") or "").strip() or (first_line[0][:60] if first_line else "Modeling session")
 
@@ -380,16 +379,17 @@ def _ensure_reconstruction_process(session: dict[str, Any]) -> None:
 def _ensure_modeling_process(session: dict[str, Any]) -> None:
     if processes.is_alive(session["id"]):
         return
-    require_openai_key()
     config = session.get("config") or {}
     saved = defaults()
+    model = config.get("model") or saved["modeling_model"]
+    require_model_key(provider_for_model(model))
     store.update_session(session["id"], status="starting", last_error=None)
     bus.publish(session["id"], {"type": "status", "state": "starting", "detail": "Starting the agent", "running": True})
     try:
         processes.start_modeling(
             session["id"],
             workspace_relative=config.get("workspace") or "workspaces/default",
-            model=config.get("model") or saved["modeling_model"],
+            model=model,
             effort=config.get("reasoning_effort") or saved["modeling_effort"],
             max_turns=int(config.get("max_turns") or saved["modeling_max_turns"]),
             env=driver_env("modeling"),

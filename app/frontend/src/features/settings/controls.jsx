@@ -64,9 +64,8 @@ export function SettingsRow({ title, description, htmlFor, error, stacked = fals
  * Free-text model name with a menu of suggestions. Commits on Enter, on
  * blur, and when a suggestion is picked; an empty field restores the value.
  * `onCommit(model)` may return false (or a promise of false) when saving failed.
- * `claude` lists Claude models too (the reconstruction agent runs on them).
  */
-export function ModelInput({ id, value, onCommit, invalid, className, claude = false }) {
+export function ModelInput({ id, value, onCommit, invalid, className }) {
   const [text, setText] = useState(value || '')
   const [accountModels, setAccountModels] = useState(null)
   const openaiConfigured = useApp((state) => Boolean(state.setup?.openai?.configured))
@@ -141,17 +140,11 @@ export function ModelInput({ id, value, onCommit, invalid, className, claude = f
           ))}
           <MenuSeparator />
           <MenuLabel>Anthropic</MenuLabel>
-          {claude ? (
-            CLAUDE_MODELS.map((model) => (
-              <MenuItem key={model} checked={model === value} onSelect={() => pick(model)}>
-                <span className="font-mono text-[12.5px]">{model}</span>
-              </MenuItem>
-            ))
-          ) : (
-            <MenuItem disabled hint="Coming soon">
-              Claude models
+          {CLAUDE_MODELS.map((model) => (
+            <MenuItem key={model} checked={model === value} onSelect={() => pick(model)}>
+              <span className="font-mono text-[12.5px]">{model}</span>
             </MenuItem>
-          )}
+          ))}
         </MenuContent>
       </Menu>
     </div>

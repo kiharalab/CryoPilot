@@ -101,8 +101,8 @@ def anthropic_key() -> str:
 
 
 def require_model_key(provider: str | None) -> None:
-    """The API key a reconstruction session's provider needs. Ollama needs none;
-    a run without a recorded provider ran on OpenAI."""
+    """The API key a session's provider needs. Ollama needs none; a run without
+    a recorded provider ran on OpenAI."""
 
     if provider == "ollama":
         return
@@ -160,12 +160,11 @@ def driver_env(agent: str, *, guide: str | None = None) -> dict[str, str]:
     that agent uses (CryoSPARC for reconstruction, CryoZeta for modeling).
     Empty values are not exported."""
 
-    env = {"OPENAI_API_KEY": openai_key()}
+    env = {"OPENAI_API_KEY": openai_key(), "ANTHROPIC_API_KEY": anthropic_key()}
     if agent == "reconstruction":
         cryosparc = cryosparc_settings()
         env.update(
             {
-                "ANTHROPIC_API_KEY": anthropic_key(),
                 "CRYOSPARC_BASE_URL": cryosparc["url"],
                 "CRYOSPARC_EMAIL": cryosparc["email"],
                 "CRYOSPARC_PASSWORD": credentials.get("cryosparc_password"),

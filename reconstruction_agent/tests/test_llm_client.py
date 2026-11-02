@@ -150,6 +150,32 @@ class OpenAIImageTests(unittest.TestCase):
 
 
 class AnthropicRequestTests(unittest.TestCase):
+    def test_a_tool_output_list_becomes_text_and_images_in_the_tool_result(self):
+        buffer = io.BytesIO()
+        Image.new("RGB", (4, 4)).save(buffer, format="PNG")
+        data = base64.b64encode(buffer.getvalue()).decode("ascii")
+        client = llm_client.AnthropicMessagesClient(FakeAnthropic())
+
+        _system, messages = client.messages(
+            [
+                {"role": "user", "content": "go"},
+                {"type": "function_call", "call_id": "toolu_1", "name": "view_image", "arguments": "{}"},
+                {
+                    "type": "function_call_output",
+                    "call_id": "toolu_1",
+                    "output": [
+                        {"type": "input_text", "text": "Loaded."},
+                        {"type": "input_image", "image_url": f"data:image/png;base64,{data}", "detail": "high"},
+                    ],
+                },
+            ]
+        )
+
+        result = messages[-1]["content"][0]
+        self.assertEqual(result["type"], "tool_result")
+        self.assertEqual(result["content"][0], {"type": "text", "text": "Loaded."})
+        self.assertEqual(result["content"][1]["source"]["data"], data)
+
     def test_agent_turn_request(self):
         sdk = FakeAnthropic(claude_message(block("text", text="done")))
         client = llm_client.AnthropicMessagesClient(sdk, reasoning_effort="xhigh")
@@ -269,6 +295,23 @@ class AnthropicRequestTests(unittest.TestCase):
 
 
 class AnthropicResponseTests(unittest.TestCase):
+    def test_a_fallback_leaves_out_the_declined_attempts_thinking_and_calls(self):
+        message = claude_message(
+            block("thinking", thinking="Declined attempt.", signature="sig-a"),
+            block("text", text="Partial text."),
+            block("tool_use", id="toolu_1", name="run_code", input={}),
+            block("fallback"),
+            block("thinking", thinking="Fallback model.", signature="sig-b"),
+            block("tool_use", id="toolu_2", name="run_code", input={}),
+            stop_reason="tool_use",
+        )
+
+        output = llm_client.AnthropicMessagesClient(FakeAnthropic()).response(message).output
+
+        self.assertEqual([item["type"] for item in output], ["message", "reasoning", "function_call"])
+        self.assertEqual(output[1]["encrypted_content"], "sig-b")
+        self.assertEqual(output[2]["call_id"], "toolu_2")
+
     def test_blocks_become_items_that_replay_unchanged(self):
         message = claude_message(
             block("thinking", thinking="Plan the next job.", signature="sig-a"),

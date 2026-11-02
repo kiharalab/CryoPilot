@@ -69,7 +69,7 @@ CryoPilot has been tested on:
 ### Accounts and services
 
 - An **OpenAI API key** (`OPENAI_API_KEY`). Both agents use GPT-5.5 by default, at the `xhigh` reasoning setting for the reconstruction agent and `high` for the modeling agent, as in the paper. You can choose any other OpenAI model (see [Instructions for use](#instructions-for-use)).
-- Optional: an **Anthropic API key** (`ANTHROPIC_API_KEY`) to run the reconstruction agent on a Claude model such as `claude-sonnet-5-5`. The modeling agent runs on OpenAI models only.
+- Optional: an **Anthropic API key** (`ANTHROPIC_API_KEY`) to run either agent on a Claude model such as `claude-sonnet-5-5`.
 - A **CryoSPARC v5.0.x** instance and user account, for the reconstruction agent.
 - A **CryoZeta** account on the Kihara Lab EM server (<https://em.kiharalab.org>), for model building by the modeling agent.
 

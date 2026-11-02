@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "A small terminal cryo-EM modeling and DAQ validation agent."
 requires-python = ">=3.10"
 dependencies = [
+  "anthropic>=2.3",
   "gemmi>=0.7.3",
   "matplotlib>=3.8",
   "mrcfile>=1.5",

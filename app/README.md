@@ -69,8 +69,8 @@ Agreeing to the license is saved in the app database (`license_accepted`), so on
 person agrees for everyone. An install set up under an earlier license shows the agreement once on its
 own before the workspace.
 
-To run the reconstruction agent on a Claude model, add an Anthropic API key in **Settings > Accounts**
-and choose a model such as `claude-sonnet-5-5`; the modeling agent runs on OpenAI models only.
+To run either agent on a Claude model, add an Anthropic API key in **Settings > Accounts**
+and choose a model such as `claude-sonnet-5-5`.
 
 URLs, emails, and user names are saved in the app database. Passwords and the API keys stay in the
 server's memory, unless you turn on **Remember passwords on this computer**. They are then written to
@@ -175,7 +175,8 @@ session's **Agent output** log.
   and continued in the app.
 - `modeling_driver.py` runs inside `modeling_agent/.venv`, keeps conversation memory in an openai-agents
   `SQLiteSession`, and streams reasoning summaries, tool calls, tool results (including images), and the
-  answer.
+  answer. A `claude-…` model runs through `modeling_agent/claude_model.py`, an Agents SDK model on the
+  Anthropic Messages API.
 
 Stopping a turn sends `SIGINT` to the driver, which the harness already handles as a checkpointed
 interruption. A stopped session resumes when you send it a message.
