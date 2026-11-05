@@ -1,5 +1,5 @@
-// First-run setup: the license, OpenAI, CryoSPARC, CryoZeta, the processing
-// guide, then a last look at the modeling toolchain. Each step saves as it
+// First-run setup: the license, an OpenAI or Anthropic API key, CryoSPARC,
+// CryoZeta, the processing guide, then a last look at the modeling toolchain. Each step saves as it
 // goes, so leaving halfway keeps what was entered; finishing marks setup
 // complete.
 import { useState } from 'react'
@@ -7,17 +7,31 @@ import { Check, CircleCheck, Info } from 'lucide-react'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { useApp } from '../../store/app'
-import { Button, InlineError, Switch } from '../../components/ui'
+import { Button, InlineError, Segmented, Switch } from '../../components/ui'
 import { BrandMark } from '../../layout/Brand'
 import { GuidePicker } from '../settings/GuidePicker'
 import { ToolchainStatus } from '../settings/ToolchainStatus'
 import { LicenseStep } from './License'
 import { SetupPage, StepFooter, StepLayout } from './SetupPage'
-import { ResultLine, ServiceFields, initialValues, isConfigured, isDirty, saveAndTest, systemName, validate } from './services'
+import {
+  KEY_VARIABLES,
+  ResultLine,
+  SERVICE_NAMES,
+  ServiceFields,
+  defaultModelsFor,
+  initialValues,
+  isConfigured,
+  isDirty,
+  isKeyService,
+  modelService,
+  saveAndTest,
+  systemName,
+  validate,
+} from './services'
 
 const STEPS = [
   { id: 'license', label: 'License' },
-  { id: 'openai', label: 'OpenAI' },
+  { id: 'api_key', label: 'API key' },
   { id: 'cryosparc', label: 'CryoSPARC' },
   { id: 'cryozeta', label: 'CryoZeta' },
   { id: 'guide', label: 'Guide' },
@@ -64,22 +78,7 @@ export function Onboarding({ onDone }) {
 
       {step.id === 'license' ? <LicenseStep onDone={() => finishStep('done')} /> : null}
 
-      {step.id === 'openai' ? (
-        <CredentialStep
-          {...credentialProps('openai')}
-          title="Connect OpenAI"
-          description="Both agents run on OpenAI models. They use GPT-5.5 by default, and any OpenAI model works. To run them on a Claude model, add an Anthropic API key later in Settings."
-          footnote={
-            <>
-              Create a key at{' '}
-              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer noopener" className="text-accent-text hover:underline">
-                platform.openai.com/api-keys
-              </a>
-              .
-            </>
-          }
-        />
-      ) : null}
+      {step.id === 'api_key' ? <ApiKeyStep credentialProps={credentialProps} /> : null}
 
       {step.id === 'cryosparc' ? (
         <CredentialStep
@@ -170,13 +169,69 @@ function Stepper({ current, reached, outcomes, onSelect }) {
   )
 }
 
+// ------------------------------------------------------------------ API key
+const KEY_PROVIDERS = {
+  openai: {
+    description: 'Both agents will run on OpenAI models. They use GPT-5.5 by default, and any OpenAI model works.',
+    keysUrl: 'https://platform.openai.com/api-keys',
+    keysLabel: 'platform.openai.com/api-keys',
+  },
+  anthropic: {
+    description: 'Both agents will run on Claude models. They use Claude Sonnet 5.5 by default, and any Claude model works.',
+    keysUrl: 'https://platform.claude.com/settings/keys',
+    keysLabel: 'platform.claude.com/settings/keys',
+  },
+}
+
+/** The provider to show first: the default models' one, unless only the other has a key. */
+function initialKeyService(setup) {
+  const first = modelService(setup?.defaults?.reconstruction_model)
+  const other = first === 'openai' ? 'anthropic' : 'openai'
+  return !setup?.[first]?.configured && setup?.[other]?.configured ? other : first
+}
+
+/** The choice of provider. Continuing with a key makes that provider the agents' default. */
+function ApiKeyStep({ credentialProps }) {
+  const setup = useApp((state) => state.setup)
+  const [service, setService] = useState(() => initialKeyService(setup))
+  const provider = KEY_PROVIDERS[service]
+  const changes = defaultModelsFor(service, setup?.defaults)
+  return (
+    <CredentialStep
+      // Each provider has its own form.
+      key={service}
+      {...credentialProps(service)}
+      title="Choose an API key"
+      description={provider.description}
+      settings={Object.keys(changes).length ? { defaults: changes } : null}
+      chooser={
+        <Segmented
+          ariaLabel="API key provider"
+          value={service}
+          onChange={setService}
+          options={Object.keys(KEY_PROVIDERS).map((value) => ({ value, label: SERVICE_NAMES[value] }))}
+        />
+      }
+      footnote={
+        <>
+          Create a key at{' '}
+          <a href={provider.keysUrl} target="_blank" rel="noreferrer noopener" className="text-accent-text hover:underline">
+            {provider.keysLabel}
+          </a>
+          . You can add the other provider's key later in Settings.
+        </>
+      }
+    />
+  )
+}
+
 // -------------------------------------------------------------- credentials
 /**
- * OpenAI, CryoSPARC, or CryoZeta. Continue saves what was entered and
- * tests the connection; a failed test can be retried or, once something is
- * saved, passed with "Continue anyway".
+ * An API key, CryoSPARC, or CryoZeta. Continue saves what was entered, with
+ * `settings` if given, and tests the connection; a failed test can be retried
+ * or, once something is saved, passed with "Continue anyway".
  */
-function CredentialStep({ service, title, description, notice, footnote, canSkip = false, result, onResult, onBack, onDone, onSkip }) {
+function CredentialStep({ service, title, description, chooser, settings, notice, footnote, canSkip = false, result, onResult, onBack, onDone, onSkip }) {
   const setup = useApp((state) => state.setup)
   const setSetup = useApp((state) => state.setSetup)
   const [values, setValues] = useState(() => initialValues(service, setup))
@@ -189,10 +244,10 @@ function CredentialStep({ service, title, description, notice, footnote, canSkip
   const dirty = isDirty(service, values, setup)
   const passed = !dirty && configured && (result?.tone === 'success' || result?.tone === 'warning')
   const continueAnyway = failedValues === values && configured
-  const showKeyCard = service === 'openai' && setup?.openai?.configured && !replacingKey
+  const showKeyCard = isKeyService(service) && setup?.[service]?.configured && !replacingKey
 
   const proceed = async () => {
-    if (passed || continueAnyway) {
+    if ((passed || continueAnyway) && !settings) {
       onDone()
       return
     }
@@ -200,7 +255,7 @@ function CredentialStep({ service, title, description, notice, footnote, canSkip
     setErrors(problems)
     if (Object.keys(problems).length) return
     setBusy(true)
-    const outcome = await saveAndTest(service, values, setup)
+    const outcome = await saveAndTest(service, values, setup, settings)
     setBusy(false)
     if (outcome.setup) setSetup(outcome.setup)
     onResult(outcome.result)
@@ -234,6 +289,8 @@ function CredentialStep({ service, title, description, notice, footnote, canSkip
           />
         }
       >
+        {chooser ? <div className="mb-5">{chooser}</div> : null}
+
         {notice ? (
           <div className="mb-5 flex items-start gap-2.5 rounded-xl bg-subtle px-3.5 py-3 text-sm text-muted">
             <Info size={15} strokeWidth={1.75} className="mt-0.5 shrink-0 text-faint" />
@@ -246,7 +303,7 @@ function CredentialStep({ service, title, description, notice, footnote, canSkip
             <CircleCheck size={16} strokeWidth={1.75} className="shrink-0 text-success" />
             <div className="min-w-[200px] flex-1">
               <p className="text-sm font-medium text-fg">
-                {setup.openai.source === 'environment' ? 'Found OPENAI_API_KEY in the environment' : 'An API key is saved'}
+                {setup[service].source === 'environment' ? `Found ${KEY_VARIABLES[service]} in the environment` : 'An API key is saved'}
               </p>
               <p className="text-sm text-muted">Continue checks that it works.</p>
             </div>

@@ -179,6 +179,10 @@ class ProcessManager:
         process = self.get(session_id)
         return bool(process and process.alive)
 
+    def running(self) -> int:
+        with self._lock:
+            return sum(process.alive for process in self._processes.values())
+
     def _register(self, process: AgentProcess) -> AgentProcess:
         with self._lock:
             self._processes[process.session_id] = process

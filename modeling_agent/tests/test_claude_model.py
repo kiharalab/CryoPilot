@@ -4,8 +4,10 @@ import asyncio
 import base64
 import copy
 import io
+import json
 import os
 import random
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -291,6 +293,44 @@ class ImageSizeTests(unittest.TestCase):
         data = png_url().split(",", 1)[1]
         client = ClaudeModel("claude-sonnet-5-5", sdk=FakeSdk()).client
         self.assertEqual(client.fit_image("image/png", data), ("image/png", data))
+
+
+DRIVER_SCRIPT = """
+import asyncio, sys
+sys.path[:0] = [{tests!r}, {drivers!r}]
+from agents import Agent, SQLiteSession
+from test_claude_model import FakeSdk, block, message, render
+import modeling_driver
+from claude_model import ClaudeModel
+
+sdk = FakeSdk(
+    message(block("text", text="Rendering the map."), block("tool_use", id="toolu_1", name="render", input={{"path": "a.mrc"}}), stop_reason="tool_use"),
+    message(block("text", text="It shows one particle.")),
+)
+agent = Agent(name="test", instructions="Help.", model=ClaudeModel("claude-sonnet-5-5", sdk=sdk), tools=[render])
+asyncio.run(modeling_driver.run_turn(agent, SQLiteSession("test"), "Render it.", 5))
+"""
+
+
+class DriverEventTests(unittest.TestCase):
+    def test_text_before_a_tool_call_is_not_part_of_the_final_answer(self):
+        tests = Path(__file__).resolve().parent
+        drivers = tests.parents[1] / "app" / "server" / "drivers"
+        with tempfile.TemporaryDirectory() as sandbox:
+            completed = subprocess.run(
+                [sys.executable, "-c", DRIVER_SCRIPT.format(tests=str(tests), drivers=str(drivers))],
+                env={**os.environ, "MODELING_AGENT_SANDBOX": sandbox, "ANTHROPIC_API_KEY": "test"},
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr[-2000:])
+        events = [json.loads(line) for line in completed.stdout.splitlines() if line.startswith("{")]
+        shown = [(event["event"], event.get("text")) for event in events if event["event"] in ("answer", "tool_call", "tool_output")]
+        self.assertEqual(
+            [(name, text) for name, text in shown if name != "tool_output"],
+            [("answer", "Rendering the map."), ("tool_call", None), ("answer", "It shows one particle.")],
+        )
 
 
 if __name__ == "__main__":

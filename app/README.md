@@ -61,7 +61,7 @@ separated; `--host 0.0.0.0` turns the host check off.
 
 ### First run and sign-in
 
-The first time, the app walks through six steps: the license agreement, the OpenAI API key, CryoSPARC
+The first time, the app walks through six steps: the license agreement, an OpenAI or Anthropic API key, CryoSPARC
 (URL, email, and password), the CryoZeta account on the Kihara Lab EM server, the processing guide, and
 a check of the programs the modeling agent needs. On a computer that is not Linux the CryoSPARC step can
 be skipped, because the reconstruction agent runs only on the computer where CryoSPARC is installed.
@@ -69,8 +69,8 @@ Agreeing to the license is saved in the app database (`license_accepted`), so on
 person agrees for everyone. An install set up under an earlier license shows the agreement once on its
 own before the workspace.
 
-To run either agent on a Claude model, add an Anthropic API key in **Settings > Accounts**
-and choose a model such as `claude-sonnet-5-5`.
+Both agents start on the provider chosen in that step: GPT-5.5 with OpenAI, `claude-sonnet-5-5` with
+Anthropic. To use the other provider's models as well, add its key in **Settings > Accounts**.
 
 URLs, emails, and user names are saved in the app database. Passwords and the API keys stay in the
 server's memory, unless you turn on **Remember passwords on this computer**. They are then written to

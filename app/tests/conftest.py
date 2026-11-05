@@ -15,6 +15,9 @@ _home = tempfile.mkdtemp(prefix="cryopilot-tests-")
 os.environ.setdefault("CRYOPILOT_APP_HOME", _home)
 os.environ.setdefault("CRYOPILOT_SESSION_DB", os.path.join(_home, "sessions.sqlite3"))
 os.environ.setdefault("CRYOPILOT_ALLOWED_HOSTS", "testserver")
+# Tests never ask the website for new versions or add to the install count.
+os.environ.setdefault("CRYOPILOT_NO_UPDATE_CHECK", "1")
+os.environ.setdefault("CRYOPILOT_NO_ANALYTICS", "1")
 
 
 import pytest  # noqa: E402

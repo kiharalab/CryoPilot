@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 
 const THEME_KEY = 'cryopilot-theme'
 const PROJECT_KEY = 'cryopilot-project'
+const UPDATE_RESTART_TIMEOUT_MS = 2 * 60 * 1000
 
 function readStorage(key, fallback) {
   try {
@@ -38,6 +39,9 @@ export const useApp = create((set, get) => ({
   // ------------------------------------------------------------- server data
   /** /api/setup payload; null until loaded. */
   setup: null,
+  /** /api/update payload; null until loaded. */
+  update: null,
+  updateRestarting: false,
   projects: [],
   projectId: readStorage(PROJECT_KEY, null),
   /** The current project with .sessions and .directories, or null. */
@@ -101,6 +105,44 @@ export const useApp = create((set, get) => ({
   },
   setSetup(setup) {
     set({ setup })
+  },
+
+  async refreshUpdate() {
+    set({ update: await api.update() })
+  },
+  async installUpdate() {
+    try {
+      set({ update: await api.installUpdate() })
+    } catch (err) {
+      get().toast({ tone: 'error', title: err.message })
+    }
+  },
+  /** Restarts into the installed update, and loads the new app once the server answers again. */
+  async restartForUpdate() {
+    const expected = get().update?.install?.version
+    set({ updateRestarting: true })
+    try {
+      await api.restartForUpdate()
+    } catch (err) {
+      set({ updateRestarting: false })
+      get().toast({ tone: 'error', title: err.message })
+      return
+    }
+    const deadline = Date.now() + UPDATE_RESTART_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      try {
+        const update = await api.update()
+        if (update.current === expected) {
+          window.location.reload()
+          return
+        }
+      } catch {
+        // The server is still restarting.
+      }
+    }
+    set({ updateRestarting: false })
+    get().toast({ tone: 'error', title: 'CryoPilot did not come back after the restart.', description: 'Check its terminal, or run: cryopilot log' })
   },
 
   async loadProjects() {

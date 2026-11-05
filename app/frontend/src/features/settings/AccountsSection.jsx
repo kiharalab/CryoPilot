@@ -9,6 +9,7 @@ import { formatRelative } from '../../lib/format'
 import { useApp } from '../../store/app'
 import { Button, ConfirmDialog, Switch } from '../../components/ui'
 import {
+  KEY_VARIABLES,
   ResultLine,
   ServiceFields,
   SERVICE_NAMES,
@@ -42,7 +43,6 @@ const ACCOUNT_INFO = {
   },
 }
 
-const KEY_VARIABLES = { openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY' }
 
 /** {tone: 'on'|'pending'|'off', label, detail} for the card header. */
 function accountStatus(service, setup) {

@@ -68,8 +68,7 @@ CryoPilot has been tested on:
 
 ### Accounts and services
 
-- An **OpenAI API key** (`OPENAI_API_KEY`). Both agents use GPT-5.5 by default, at the `xhigh` reasoning setting for the reconstruction agent and `high` for the modeling agent, as in the paper. You can choose any other OpenAI model (see [Instructions for use](#instructions-for-use)).
-- Optional: an **Anthropic API key** (`ANTHROPIC_API_KEY`) to run either agent on a Claude model such as `claude-sonnet-5-5`.
+- An API key from **OpenAI** (`OPENAI_API_KEY`) or **Anthropic** (`ANTHROPIC_API_KEY`). On OpenAI, both agents use GPT-5.5 by default, at the `xhigh` reasoning setting for the reconstruction agent and `high` for the modeling agent, as in the paper. On Anthropic, the web application starts both agents on `claude-sonnet-5-5`. You can choose any other model from either provider (see [Instructions for use](#instructions-for-use)).
 - A **CryoSPARC v5.0.x** instance and user account, for the reconstruction agent.
 - A **CryoZeta** account on the Kihara Lab EM server (<https://em.kiharalab.org>), for model building by the modeling agent.
 
@@ -223,7 +222,7 @@ source .venv/bin/activate
 
 Start the server from the binary (`cryopilot`) or from source (`python app/serve.py`). It listens on `127.0.0.1:8790`, prints an access link such as `http://127.0.0.1:8790/?token=...`, and opens it in your browser. The token keeps other users of a shared computer out of your sessions. A new token is made each time the server starts, so you open the new link after a restart. Set `CRYOPILOT_TOKEN` (at least 22 characters) to keep the same link.
 
-The first time, CryoPilot asks you to agree to its license, then asks for your OpenAI API key, your CryoSPARC URL, email, and password, and your CryoZeta account, and which processing guide the reconstruction agent follows. It also shows which modeling programs it found. Passwords stay in the server's memory unless you choose to remember them on this computer.
+The first time, CryoPilot asks you to agree to its license, then asks for an OpenAI or Anthropic API key, your CryoSPARC URL, email, and password, and your CryoZeta account, and which processing guide the reconstruction agent follows. It also shows which modeling programs it found. Passwords stay in the server's memory unless you choose to remember them on this computer.
 
 The window has three columns, and you can drag each divider:
 
@@ -257,6 +256,7 @@ cryopilot start --lan     # start in the background on port 8790
 | `cryopilot start [--lan] [--port N]` | Start in the background. Without `--lan`, it answers only on this computer (use `ssh -L`). The address is saved for later starts. |
 | `cryopilot stop` | Stop it. Agent runs in progress stop too. |
 | `cryopilot restart` | Stop and start again with the same address. Run it after you change the password. |
+| `cryopilot update` | Show what changed in a newer version and install it. `--check` only shows what changed. |
 | `cryopilot status` | Show whether it runs and the links to open. |
 | `cryopilot log [-f]` | Show the server log (`~/.cryopilot/app/server.log`). |
 | `cryopilot password` | Set or change the password. A new password signs every browser out. |
@@ -319,9 +319,9 @@ Language-model outputs are not deterministic, so a new run takes its own process
 # Tests
 
 ```bash
-python -m pytest reconstruction_agent/tests                  # reconstruction agent: 146 tests, about 4 s (needs pytest)
-python -m pytest app/tests                                   # web application: 123 tests (needs pytest and httpx)
-cd modeling_agent && uv run python -m unittest discover -s tests   # modeling agent: 78 tests, about 5 s
+python -m pytest reconstruction_agent/tests                  # reconstruction agent: 159 tests, about 4 s (needs pytest)
+python -m pytest app/tests                                   # web application: 134 tests (needs pytest and httpx)
+cd modeling_agent && uv run python -m unittest discover -s tests   # modeling agent: 91 tests, about 5 s
 ```
 
 The tests run offline and do not need CryoSPARC, CryoZeta, or an API key.

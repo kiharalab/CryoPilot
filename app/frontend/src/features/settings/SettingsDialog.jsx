@@ -8,6 +8,7 @@ import { useApp } from '../../store/app'
 import { Dialog, DialogContent, Kbd, Segmented } from '../../components/ui'
 import { BrandMark } from '../../layout/Brand'
 import { systemName } from '../setup/services'
+import { Changelog, UpdateStatus } from '../update/UpdateNotice'
 import { AccountsSection } from './AccountsSection'
 import { ModelingSection, ReconstructionSection } from './AgentSections'
 import { SettingsGroup, SettingsRow } from './controls'
@@ -116,8 +117,6 @@ function GeneralSection() {
 }
 
 // ------------------------------------------------------------------- about
-const VERSION = '0.3.2'
-
 function ExternalAnchor({ href, children }) {
   return (
     <a href={href} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-sm text-accent-text hover:underline">
@@ -129,15 +128,18 @@ function ExternalAnchor({ href, children }) {
 
 function AboutSection() {
   const system = useApp((state) => state.setup?.platform?.system)
+  const version = useApp((state) => state.setup?.version)
+  const hasReleases = useApp((state) => Boolean(state.update?.releases?.length))
   return (
     <>
       <div className="flex items-center gap-3.5">
         <BrandMark size={40} />
         <div>
           <p className="text-lg font-semibold tracking-[-0.01em] text-fg">CryoPilot</p>
-          <p className="text-sm text-muted">Version {VERSION}</p>
+          <p className="text-sm text-muted">Version {version}</p>
         </div>
       </div>
+      <UpdateStatus />
       <p className="mt-4 text-sm text-muted">
         CryoPilot takes a cryo-EM dataset to a validated atomic model. The reconstruction agent processes the data in CryoSPARC, and the modeling agent
         builds, fits, refines, and validates models in the maps. Developed by the Kihara Lab at Purdue University.
@@ -161,6 +163,14 @@ function AboutSection() {
           </SettingsRow>
         ) : null}
       </SettingsGroup>
+      {hasReleases ? (
+        <SettingsGroup title="Changelog">
+          <Changelog />
+          <p className="mt-3">
+            <ExternalAnchor href="https://cryopilot.vercel.app/changelog">See it on the website</ExternalAnchor>
+          </p>
+        </SettingsGroup>
+      ) : null}
     </>
   )
 }

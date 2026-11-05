@@ -6,6 +6,7 @@
     cryopilot status
     cryopilot log [-n LINES] [-f]
     cryopilot password
+    cryopilot update [--check] [--yes]
 
 ``start`` runs the server detached from the terminal, in its own session, so
 it keeps running after you log out, until ``cryopilot stop`` or the computer
@@ -20,6 +21,8 @@ A background server always asks for the shared password, set once with
 
 The home folder can be shared between computers (NFS), so ``server.pid``
 records which computer runs the server, and the commands act only there.
+
+``update`` installs a newer version; see server/updates.py.
 """
 
 from __future__ import annotations
@@ -85,8 +88,12 @@ def _alive(pid: int) -> bool:
 def _is_cryopilot(pid: int) -> bool:
     """True when the process is a CryoPilot server, not an unrelated one that reused the ID."""
 
-    completed = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True, check=False)
-    command = completed.stdout.strip()
+    try:
+        command = Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", errors="replace")
+    except OSError:
+        # No /proc on macOS. Minimal Linux containers have no ps, but they have /proc.
+        completed = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True, check=False)
+        command = completed.stdout.strip()
     return "cryopilot" in command or "serve.py" in command
 
 
@@ -346,6 +353,10 @@ def command_status(args: argparse.Namespace) -> int:
         print(f"\n    It answers only on this computer. From another one, forward the port first:")
         print(f"    ssh -L {port}:localhost:{port} <user>@{_this_machine()}")
     print(f"\n    Sign in with the CryoPilot password. Log: {LOG_PATH}")
+    from app.server import updates
+
+    if update_notice := updates.notice():
+        print(f"\n    {update_notice}")
     return 0
 
 
@@ -382,6 +393,62 @@ def command_log(args: argparse.Namespace) -> int:
             return 0
 
 
+def _print_progress(done: int, total: int) -> None:
+    if done >= total:
+        print("\rDownloaded. Checking the new version, which can take a minute.", flush=True)
+    elif sys.stdout.isatty():
+        print(f"\rDownloading… {done * 100 // total}%", end="", flush=True)
+
+
+def command_update(args: argparse.Namespace) -> int:
+    from app.server import updates
+    from app.version import VERSION
+
+    try:
+        manifest = updates.fetch_manifest()
+    except updates.UpdateError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    release = updates.newer_release(manifest)
+    if release is None:
+        print(f"CryoPilot {VERSION} is the latest version.")
+        return 0
+    print(f"CryoPilot {release['version']} is available (you have {VERSION}).\n")
+    for entry in updates.notes_since_current(manifest):
+        print(f"{entry.get('version')} ({entry.get('date')})")
+        for note in entry.get("notes") or []:
+            print(f"  - {note}")
+    print()
+    if args.check:
+        print("Update with:  cryopilot update")
+        return 0
+    blocker = updates.install_blocker()
+    if blocker:
+        print(blocker, file=sys.stderr)
+        return 1
+    print("This replaces the program and removes the files of older versions. Projects, sessions, and settings stay as they are.")
+    if not args.yes:
+        if not sys.stdin.isatty():
+            print("Run it with --yes to update without this question.", file=sys.stderr)
+            return 2
+        if input("Update now? [Y/n]: ").strip().lower() not in {"", "y", "yes"}:
+            print("Nothing was changed.")
+            return 0
+    print("Downloading…", flush=True)
+    try:
+        program = updates.install(release, _print_progress)
+    except (updates.UpdateError, OSError) as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    updates.count_install(release["version"])
+    print(f"CryoPilot {release['version']} is installed. A CryoPilot that is already running keeps the old version until you restart it.")
+    if server_record() is not None:
+        print("Restart the background server with:  cryopilot restart")
+    # The new program removes the old one's files, now that nothing here runs from them.
+    sys.stdout.flush()
+    os.execv(program, [str(program), updates.REMOVE_OLD_ARGUMENT])
+
+
 COMMANDS = {
     "start": (command_start, "Start CryoPilot in the background."),
     "stop": (command_stop, "Stop the background CryoPilot."),
@@ -389,6 +456,7 @@ COMMANDS = {
     "status": (command_status, "Show whether it is running and where to open it."),
     "log": (command_log, "Show its log."),
     "password": (command_password, "Set the password everyone signs in with."),
+    "update": (command_update, "Install a newer version, if there is one."),
 }
 
 
@@ -405,6 +473,9 @@ def main(argv: list[str]) -> int:
         if name == "log":
             sub.add_argument("-n", "--lines", type=int, default=50, help="How many lines to show (default 50).")
             sub.add_argument("-f", "--follow", action="store_true", help="Keep showing new lines until Ctrl-C.")
+        if name == "update":
+            sub.add_argument("--check", action="store_true", help="Only show whether a newer version exists and what changed.")
+            sub.add_argument("-y", "--yes", action="store_true", help="Do not ask before installing.")
     args = parser.parse_args(argv)
     try:
         return COMMANDS[args.command][0](args)

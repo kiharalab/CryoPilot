@@ -106,7 +106,6 @@ class EventTrace:
         self.answer_buffer = ""
         self.tool_names: dict[str, str] = {}
         self.answer_streamed = False
-        self.answer_paused = False
 
     def reasoning_delta(self, delta: str) -> None:
         self.reasoning_buffer += delta
@@ -120,7 +119,7 @@ class EventTrace:
 
     def tool_called(self, item: ToolCallItem) -> None:
         self.reasoning_done()
-        self.answer_paused = bool(self.answer_buffer)
+        self.commentary_done()
         name = item.tool_name or "unknown_tool"
         if item.call_id:
             self.tool_names[item.call_id] = name
@@ -140,13 +139,16 @@ class EventTrace:
 
     def answer_delta(self, delta: str) -> None:
         self.reasoning_done()
-        if self.answer_paused:
-            # Text the model wrote before a tool call stays apart from what follows it.
-            delta = "\n\n" + delta
-            self.answer_paused = False
         self.answer_streamed = True
         self.answer_buffer += delta
         emitter.emit("delta", channel="answer", text=delta)
+
+    def commentary_done(self) -> None:
+        # Text the model wrote before a tool call stays there, apart from the final answer.
+        text = self.answer_buffer.strip()
+        self.answer_buffer = ""
+        if text:
+            emitter.emit("answer", text=text)
 
     def finish(self, final_output: str) -> None:
         self.reasoning_done()

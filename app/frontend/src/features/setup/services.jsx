@@ -23,6 +23,29 @@ export function modelService(model) {
 /** Claude models the agents can run on, most capable first. */
 export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5']
 
+/** The model both agents start on when setup chooses Anthropic. */
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5-5'
+
+/** The environment variable that can hold each API key. */
+export const KEY_VARIABLES = { openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY' }
+
+/** The services whose API keys the default models run on. */
+export function defaultModelServices(defaults) {
+  return [...new Set([modelService(defaults?.reconstruction_model), modelService(defaults?.modeling_model)])]
+}
+
+/**
+ * The default-model settings that put both agents on `service`; empty when they
+ * already run on it. An empty name restores the server's default model.
+ */
+export function defaultModelsFor(service, defaults) {
+  const changes = {}
+  for (const key of ['reconstruction_model', 'modeling_model']) {
+    if (modelService(defaults?.[key]) !== service) changes[key] = service === 'anthropic' ? DEFAULT_CLAUDE_MODEL : ''
+  }
+  return changes
+}
+
 /** "CryoZeta, the Kihara Lab EM server": a service's name where a screen introduces it. */
 export function ServiceTitle({ service }) {
   return (
@@ -41,8 +64,7 @@ export function systemName(system) {
 /** Services whose password or key must be entered again (mirrors needsSignIn in App.jsx). */
 export function servicesNeedingSignIn(setup) {
   if (!setup?.onboarded) return []
-  const services = []
-  if (!setup.openai?.configured) services.push('openai')
+  const services = defaultModelServices(setup.defaults).filter((service) => !setup[service]?.configured)
   if (setup.platform?.reconstruction_supported && setup.cryosparc?.email && !setup.cryosparc?.password_set) services.push('cryosparc')
   if (setup.cryozeta?.username && !setup.cryozeta?.password_set) services.push('cryozeta')
   return services
@@ -138,15 +160,15 @@ export async function testService(service, setup) {
 
 /**
  * Saves the form (an empty password keeps the stored one), then tests the
- * connection. Never throws: returns {ok, setup, result} where `setup` is the
- * newest setup payload when anything was saved (null otherwise) and `result`
- * is {tone, text} for ResultLine.
+ * connection. `settings` is saved with the form. Never throws: returns
+ * {ok, setup, result} where `setup` is the newest setup payload when anything
+ * was saved (null otherwise) and `result` is {tone, text} for ResultLine.
  */
-export async function saveAndTest(service, values, setup) {
+export async function saveAndTest(service, values, setup, settings = null) {
   let saved = null
   try {
-    const body = settingsBody(service, values)
-    if (body) saved = await api.saveSettings(body)
+    const body = { ...settingsBody(service, values), ...settings }
+    if (Object.keys(body).length) saved = await api.saveSettings(body)
   } catch (err) {
     return { ok: false, setup: null, result: { tone: 'error', text: err.message } }
   }

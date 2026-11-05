@@ -22,6 +22,7 @@ import { useApp } from '../store/app'
 import { ConfirmDialog, IconButton, Kbd, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, StatusDot, Tip } from '../components/ui'
 import { CreateProjectDialog } from '../features/project/CreateProjectDialog'
 import { ImportSessionDialog } from '../features/project/ImportSessionDialog'
+import { SERVICE_NAMES, defaultModelServices } from '../features/setup/services'
 import { Wordmark } from './Brand'
 
 export const SESSION_ICONS = { reconstruction: Waypoints, modeling: Atom }
@@ -34,7 +35,7 @@ function sessionState(session) {
 /** Each service the agents use, and whether CryoPilot can use it now. */
 function serviceStatus(setup) {
   return [
-    { label: 'OpenAI', ok: Boolean(setup.openai?.configured) },
+    ...defaultModelServices(setup.defaults).map((service) => ({ label: SERVICE_NAMES[service], ok: Boolean(setup[service]?.configured) })),
     ...(setup.platform?.reconstruction_supported ? [{ label: 'CryoSPARC', ok: Boolean(setup.cryosparc?.password_set) }] : []),
     { label: 'CryoZeta', ok: Boolean(setup.cryozeta?.password_set) },
   ]

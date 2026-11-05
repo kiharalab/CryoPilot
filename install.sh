@@ -6,6 +6,9 @@
 # Downloads the CryoPilot binary from kiharalab.org, checks its SHA-256, keeps it
 # in ~/.local/share/cryopilot/, puts the cryopilot command in ~/.local/bin, and
 # adds ~/.local/bin to PATH in your shell's startup file if it is not there yet.
+# Run it again to upgrade: it replaces the program and removes older versions'
+# programs. The new version removes their unpacked files when it starts. Once
+# CryoPilot is installed, cryopilot update does all of this too.
 # In a terminal it first asks where each part goes and whether to change PATH;
 # press Enter to keep the default. Without a terminal, or with --yes, it uses
 # the defaults without asking:
@@ -18,13 +21,19 @@
 #   CRYOPILOT_BIN_DIR        where the cryopilot command goes (default: ~/.local/bin)
 #   CRYOPILOT_CACHE          where the first start unpacks the program (default: ~/.cache/cryopilot)
 #   CRYOPILOT_NO_MODIFY_PATH set to 1 to leave your shell startup files alone
+#   CRYOPILOT_NO_ANALYTICS   set to 1 to leave this install out of the install count
+#
+# When an install finishes, it tells cryopilot.vercel.app the version and whether
+# this is a new install or an upgrade, so that we can count installs. It waits at
+# most 5 seconds and the install does not depend on it.
 #
 # Everything runs inside main(), so a download cut short runs nothing.
 
 set -eu
 
-LATEST=0.3.2
+LATEST=0.3.5
 DOWNLOADS=https://kiharalab.org/CryoPilot/app
+INSTALL_COUNT=https://cryopilot.vercel.app/api/installs
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'cryopilot install: %s\n' "$*" >&2; exit 1; }
@@ -37,6 +46,16 @@ fetch() {  # fetch URL OUTPUT
     else
         die "curl or wget is required."
     fi
+}
+
+count_install() {  # count_install VERSION KIND
+    [ "${CRYOPILOT_NO_ANALYTICS:-0}" = 1 ] && return 0
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsS -m 5 -o /dev/null -d "version=$1&kind=$2" "$INSTALL_COUNT" >/dev/null 2>&1 || :
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -T 5 -t 1 -O /dev/null --post-data="version=$1&kind=$2" "$INSTALL_COUNT" >/dev/null 2>&1 || :
+    fi
+    return 0
 }
 
 # Questions are read from the terminal, not from standard input: under
@@ -117,6 +136,8 @@ main() {
     version=${CRYOPILOT_VERSION:-$LATEST}
     version=${version#v}
     binary=cryopilot-$version-linux-x86_64
+    # The same name for every version, so that an upgrade replaces the program.
+    program=cryopilot-linux-x86_64
     url=$DOWNLOADS/v$(printf '%s' "$version" | tr . _)/$binary
     install_dir=$(absolute "${CRYOPILOT_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/cryopilot}")
     bin_dir=$(absolute "${CRYOPILOT_BIN_DIR:-$HOME/.local/bin}")
@@ -158,7 +179,7 @@ main() {
         fi
         say ""
         say "CryoPilot $version will be installed like this:"
-        say "  Program:  $(short "$install_dir/$binary")"
+        say "  Program:  $(short "$install_dir/$program")"
         say "  Command:  $(short "$bin_dir/cryopilot") ($path_plan)"
         say "  Unpacks:  $(short "$cache_dir")/ (on the first start)"
         say ""
@@ -169,7 +190,11 @@ main() {
         say ""
     fi
 
-    work=$(mktemp -d)
+    mkdir -p "$install_dir" "$bin_dir" || die "cannot create $install_dir or $bin_dir."
+    # Next to the program, not in /tmp, which may be too small: the last step is
+    # then one rename on the same disk. Earlier installs that were killed left these.
+    rm -rf "$install_dir"/.install.*
+    work=$(mktemp -d "$install_dir/.install.XXXXXX") || die "cannot write to $install_dir."
     trap 'rm -rf "$work"' EXIT
 
     say "Downloading CryoPilot $version ($binary, about 280 MB)..."
@@ -179,14 +204,16 @@ main() {
         (cd "$work" && sha256sum -c "$binary.sha256" >/dev/null 2>&1) || die "the download is damaged (checksum mismatch). Run the installer again."
     fi
 
-    mkdir -p "$install_dir" "$bin_dir" || die "cannot create $install_dir or $bin_dir."
     chmod 755 "$work/$binary"
-    mv -f "$work/$binary" "$install_dir/$binary"
-    say "Installed $(short "$install_dir/$binary")"
+    mv -f "$work/$binary" "$install_dir/$program"
+    say "Installed $(short "$install_dir/$program")"
+    if [ -e "$bin_dir/cryopilot" ]; then kind=upgrade; else kind=new; fi
+    # Before 0.3.5 every version kept its own copy here.
+    rm -f "$install_dir"/cryopilot-[0-9]*-linux-x86_64
     # Remove the old command first: writing through a link would overwrite the binary.
     rm -f "$bin_dir/cryopilot"
     if [ "$cache_dir" = "$default_cache" ]; then
-        ln -s "$install_dir/$binary" "$bin_dir/cryopilot"
+        ln -s "$install_dir/$program" "$bin_dir/cryopilot"
         say "Linked $(short "$bin_dir/cryopilot")"
     else
         # The command is a small script that tells the binary where to unpack.
@@ -196,7 +223,7 @@ main() {
 # the program into the folder below unless CRYOPILOT_CACHE is set.
 CRYOPILOT_CACHE=\${CRYOPILOT_CACHE:-$(quote "$cache_dir")}
 export CRYOPILOT_CACHE
-exec $(quote "$install_dir/$binary") "\$@"
+exec $(quote "$install_dir/$program") "\$@"
 EOF
         chmod 755 "$bin_dir/cryopilot"
         say "Wrote $(short "$bin_dir/cryopilot")"
@@ -218,9 +245,14 @@ EOF
         fi
     fi
 
+    count_install "$version" "$kind"
+
     say ""
     say "Start CryoPilot with:  $command"
     say "The first start unpacks the program (about 780 MB) into $(short "$cache_dir")/."
+    if [ "$kind" = upgrade ]; then
+        say "A CryoPilot that is already running keeps the old version until you restart it."
+    fi
 }
 
 main "$@"

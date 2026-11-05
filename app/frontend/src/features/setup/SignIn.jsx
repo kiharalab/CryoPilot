@@ -9,7 +9,7 @@ import { BrandMark } from '../../layout/Brand'
 import { SetupPage } from './SetupPage'
 import { ResultLine, ServiceFields, ServiceTitle, initialValues, saveAndTest, servicesNeedingSignIn, validate } from './services'
 
-const SERVICE_ICONS = { openai: KeyRound, cryosparc: Microscope, cryozeta: Server }
+const SERVICE_ICONS = { openai: KeyRound, anthropic: KeyRound, cryosparc: Microscope, cryozeta: Server }
 
 export function SignIn({ onDone, onSkip }) {
   const setup = useApp((state) => state.setup)

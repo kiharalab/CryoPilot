@@ -2,7 +2,7 @@
 """Start the CryoPilot web app with one command.
 
     python app/serve.py [--port 8790] [--no-open] [--dev] [--no-auth]
-    python app/serve.py start|stop|restart|status|log|password
+    python app/serve.py start|stop|restart|status|log|password|update
 
 Builds the frontend on first run (or when sources changed), starts the API
 server on localhost, and opens the app in your browser. The app asks for an
@@ -42,7 +42,7 @@ REPO_ROOT = APP_DIR.parent
 # A chosen CRYOPILOT_TOKEN must be about as hard to guess as a generated one.
 MIN_TOKEN_LENGTH = 22
 # The background-server commands (service.py); anything else runs the server here.
-SERVICE_COMMANDS = {"start", "stop", "restart", "status", "log", "password"}
+SERVICE_COMMANDS = {"start", "stop", "restart", "status", "log", "password", "update"}
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -146,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(
         description="Run the CryoPilot web app.",
-        epilog="To run it in the background instead: cryopilot start|stop|restart|status|log|password (add -h to each).",
+        epilog="To run it in the background instead: cryopilot start|stop|restart|status|log|password (add -h to each). To install a newer version: cryopilot update.",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: localhost only).")
     parser.add_argument("--port", type=int, default=int(os.environ.get("CRYOPILOT_APP_PORT", "8790")))
@@ -177,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
     from app.server import password as lab_password
+    from app.server import updates
 
     # The server process (and its reloader child) reads these from the
     # environment: the token, a one-time code for the browser opened below,
@@ -238,6 +239,8 @@ def main(argv: list[str] | None = None) -> int:
             f"    ssh -L {args.port}:localhost:{args.port} <user>@<this-computer>\n",
             flush=True,
         )
+    if update_notice := updates.notice():
+        print(f"{update_notice}\n", flush=True)
     if not args.no_open:
         launch = url if args.no_auth else f"{url}/?launch={os.environ['CRYOPILOT_LAUNCH_CODE']}"
         threading.Thread(target=open_browser_when_listening, args=(args.host, args.port, launch), daemon=True).start()
@@ -265,6 +268,16 @@ def main(argv: list[str] | None = None) -> int:
     if PACKAGED:
         from app.server.main import app as asgi_app
     server = Server(uvicorn.Config(asgi_app if PACKAGED else "app.server.main:app", **options))
+    updates.start_background()
+    if PACKAGED:
+        def stop_for_update() -> None:
+            # Not through a signal: uvicorn would raise it again after its clean shutdown and end this process.
+            from app.server.state import shutting_down
+
+            shutting_down.set()
+            server.should_exit = True
+
+        updates.stop_server = stop_for_update
     # A closed terminal or a dropped SSH connection sends SIGHUP: stop the same way as on Ctrl-C.
     signal.signal(signal.SIGHUP, server.handle_exit)
     try:
@@ -272,6 +285,10 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         # uvicorn raises Ctrl-C again after its clean shutdown; uvicorn.run() hides it the same way.
         pass
+    if updates.restart_requested:
+        # Same process ID, address, token, and output. The browser is already open.
+        program = str(updates.new_program())
+        os.execv(program, [program, *argv, *([] if args.no_open else ["--no-open"])])
     return 0
 
 

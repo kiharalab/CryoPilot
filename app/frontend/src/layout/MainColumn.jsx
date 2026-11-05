@@ -12,6 +12,7 @@ import { NewReconstruction } from '../features/new/NewReconstruction'
 import { NewModeling } from '../features/new/NewModeling'
 import { SessionView } from '../features/chat/SessionView'
 import { CreateProjectDialog } from '../features/project/CreateProjectDialog'
+import { UpdateBanner } from '../features/update/UpdateNotice'
 import { SESSION_ICONS } from './Sidebar'
 import { BrandMark } from './Brand'
 
@@ -43,6 +44,7 @@ export function MainColumn() {
   return (
     <main className="flex h-full min-w-0 flex-col bg-canvas">
       <MainHeader />
+      <UpdateBanner />
       <div className="relative min-h-0 flex-1">{body}</div>
     </main>
   )

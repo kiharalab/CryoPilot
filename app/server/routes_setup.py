@@ -1,4 +1,4 @@
-"""Health, the license, first-run setup, settings, credentials, and processing guides."""
+"""Health, the license, first-run setup, settings, credentials, processing guides, and updates."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ import anthropic
 import openai
 from fastapi import APIRouter, Request
 
-from . import cryosparc_bridge, cryozeta_bridge, guides, modeling_toolchain
+from ..version import VERSION
+from . import cryosparc_bridge, cryozeta_bridge, guides, modeling_toolchain, updates
 from .config import HARNESS_SESSION_DB, MODELING_PYTHON, REPO_ROOT
 from .state import (
     RECONSTRUCTION_EFFORTS,
@@ -25,6 +26,7 @@ from .state import (
     cryozeta_settings,
     defaults,
     openai_key,
+    processes,
     processing_guide,
     store,
 )
@@ -57,6 +59,7 @@ def _license_view() -> dict[str, Any]:
 
 def setup_view() -> dict[str, Any]:
     return {
+        "version": VERSION,
         "license": _license_view(),
         "onboarded": bool(store.get_setting("onboarded", False)),
         "platform": {"system": SYSTEM, "reconstruction_supported": RECONSTRUCTION_SUPPORTED},
@@ -83,6 +86,38 @@ def health() -> dict[str, Any]:
         "modeling_python": MODELING_PYTHON,
         **setup_view(),
     }
+
+
+# ----------------------------------------------------------------- updates
+def _update_view() -> dict[str, Any]:
+    return {**updates.status(), "agents_running": processes.running()}
+
+
+@router.get("/api/update")
+def get_update() -> dict[str, Any]:
+    return _update_view()
+
+
+@router.post("/api/update/install")
+def install_update() -> dict[str, Any]:
+    try:
+        updates.start_install()
+    except updates.UpdateError as exc:
+        raise api_error(409, str(exc))
+    return _update_view()
+
+
+@router.post("/api/update/restart")
+def restart_for_update() -> dict[str, Any]:
+    # A restart stops the agents, so it waits until they are done.
+    running = processes.running()
+    if running:
+        raise api_error(409, f"{running} agent{'' if running == 1 else 's'} still running. Restart when they are done.")
+    try:
+        updates.restart()
+    except updates.UpdateError as exc:
+        raise api_error(409, str(exc))
+    return _update_view()
 
 
 # ----------------------------------------------------------------- license
