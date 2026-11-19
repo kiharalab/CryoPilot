@@ -3,6 +3,18 @@
 What changed in each CryoPilot release. The website and the app show these notes
 as plain text, so write them for the people who use CryoPilot, without Markdown.
 
+## 0.3.7 - 2026-11-10
+
+- New: Settings has an Experimental section. Turn on experimental features to let new reconstruction sessions search the web, search papers in Europe PMC, and read public web pages, for example the CryoSPARC guide or a methods section. Neither service needs an account, and the run report notes when a session used them.
+
+## 0.3.6 - 2026-11-09
+
+- Each session has a run report: the final map or model, its FSC or validation numbers, the jobs and parameters that led to it, the software versions, the cost, and a draft Methods paragraph. You can also download the whole conversation.
+- CryoPilot can alert you through a webhook or by email when a run finishes, asks a question, fails, or pauses. Set it up in Settings, under Alerts.
+- The message box shows what a session has cost so far, estimated from list prices. A spending limit pauses a run before its next model request, and you can raise it to continue.
+- The status line now says what a run is waiting for, including which CryoSPARC jobs are queued or running and for how long.
+- The sidebar stays up to date for sessions that are not open, and an agent that crashes now shows as an error.
+
 ## 0.3.5 - 2026-11-04
 
 - CryoPilot tells you when a newer version is available and shows what changed.

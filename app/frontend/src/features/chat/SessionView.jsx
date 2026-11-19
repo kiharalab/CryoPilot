@@ -11,8 +11,9 @@ import { CallsContext, ChatContext } from './context'
 import { ChatComposer, SETUP_ACTIONS } from './ChatComposer'
 import { LiveLine } from './LiveLine'
 import { Notice, OutboxMessage, Prose } from './messages'
+import { PausedCard } from './SpendingControl'
 import { Transcript } from './Transcript'
-import { buildModelingBlocks, buildReconstructionBlocks, stabilize } from './transcriptModel'
+import { buildModelingBlocks, buildReconstructionBlocks, pendingStep, stabilize } from './transcriptModel'
 
 const COLUMN = 'mx-auto w-full max-w-[792px] px-4 sm:px-6'
 /** Harness statuses of a reconstruction whose last turn did not finish ('completed' waits for a message). */
@@ -81,17 +82,22 @@ function TranscriptSkeleton() {
 }
 
 /** A reconstruction stopped in the middle of a turn: start its agent again to finish that turn, no message needed. */
-function ResumeLine({ sessionId }) {
-  const openSettings = useApp((state) => state.openSettings)
+function ResumeLine({ sessionId, state }) {
+  const openSettings = useApp((store) => store.openSettings)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+
+  // Stays busy after the request: this line goes away once the agent reports
+  // that it runs. An agent that fails straight away ends the wait.
+  useEffect(() => {
+    if (state === 'error') setBusy(false)
+  }, [state])
 
   const resume = async () => {
     setBusy(true)
     setError(null)
     try {
       useApp.getState().patchSession(await api.startSession(sessionId))
-      // Stays busy: this line goes away once the agent reports that it runs.
     } catch (err) {
       setError({ message: err.message, setup: err.setup })
       setBusy(false)
@@ -134,8 +140,9 @@ function Conversation({ session }) {
   const kind = session.kind
   const harnessId = session.harness_session_id
   const workspace = session.config?.workspace || (projectSlug ? `workspaces/${projectSlug}` : null)
-  const { state, running } = stream.status
+  const { state, running, detail } = stream.status
   const active = running && isActiveState(state)
+  const paused = running && state === 'paused'
 
   // A reconstruction whose agent process went away mid-turn (a server restart,
   // a crash, or a restart for new credentials) finishes that turn when it
@@ -174,8 +181,8 @@ function Conversation({ session }) {
   }, [built])
 
   const chat = useMemo(
-    () => ({ sessionId: session.id, projectId: session.project_id, kind, workspace }),
-    [session.id, session.project_id, kind, workspace],
+    () => ({ sessionId: session.id, projectId: session.project_id, kind, workspace, active, turnStart: toDate(built.lastUserAt)?.getTime() || 0 }),
+    [session.id, session.project_id, kind, workspace, active, built.lastUserAt],
   )
 
   // The optimistic copy of a sent message leaves once the transcript has it,
@@ -213,6 +220,15 @@ function Conversation({ session }) {
     }
   }
 
+  // The agent did not answer the stop request: end its process.
+  const onForceStop = async () => {
+    try {
+      useApp.getState().patchSession(await api.stopSession(session.id))
+    } catch (err) {
+      toast({ title: 'Could not end the agent process', description: err.message, tone: 'error' })
+    }
+  }
+
   // When the current turn started: seen live, else the last message (or the
   // agent process starting, for a resumed turn nobody typed).
   const turnStart = useMemo(() => {
@@ -222,6 +238,10 @@ function Conversation({ session }) {
     return Math.max(lastUser, started) || null
   }, [stream.activeSince, built.lastUserAt, session.runtime?.started_at])
 
+  // When the transcript last moved: what "Waiting for the model" is measured from.
+  const lastItemAt = kind === 'modeling' ? stream.events[stream.events.length - 1]?.created_at : stream.items[stream.items.length - 1]?.created_at
+  // A pause is not time spent waiting for the model.
+  const lastActivity = Math.max(toDate(lastItemAt)?.getTime() || 0, stream.resumedAt || 0) || null
   const lastBlock = blocks[blocks.length - 1]
   // The live status carries the error text; the stored session has it after a reload.
   const failure = active
@@ -230,7 +250,7 @@ function Conversation({ session }) {
   const showFailure = Boolean(failure) && !(lastBlock?.type === 'notice' && lastBlock.text === failure)
   const stopped = !active && !failure && (stream.lastTurn?.outcome === 'interrupted' || (!stream.lastTurn && session.status === 'interrupted'))
 
-  const empty = !blocks.length && !outbox && !active && !stream.pending.answer
+  const empty = !blocks.length && !outbox && !active && !paused && !stream.pending.answer
   const tail = (
     <>
       {outbox ? (
@@ -245,16 +265,31 @@ function Conversation({ session }) {
       ) : null}
       {active ? (
         <div className={blocks.length || outbox ? 'mt-4' : ''}>
-          <LiveLine state={state} since={turnStart} reasoning={stream.pending.reasoning} stopping={stopping} />
+          <LiveLine
+            sessionId={session.id}
+            kind={kind}
+            state={state}
+            detail={detail}
+            since={turnStart}
+            stepPending={Boolean(pendingStep(blocks))}
+            modelSince={lastActivity}
+            reasoning={stream.pending.reasoning}
+            answer={stream.pending.answer}
+            stopping={stopping}
+            connected={stream.connected}
+            limitReached={Boolean(session.usage?.over_limit)}
+            onForceStop={onForceStop}
+          />
         </div>
       ) : null}
+      {paused ? <PausedCard session={session} detail={detail} /> : null}
       {showFailure ? (
         <div className="mt-4">
           <Notice text={failure} />
         </div>
       ) : null}
       {resumable && !active ? (
-        <ResumeLine sessionId={session.id} />
+        <ResumeLine sessionId={session.id} state={state} />
       ) : stopped && lastBlock?.type !== 'notice' ? (
         <p className="mt-3 text-sm text-faint">Stopped</p>
       ) : null}
@@ -318,6 +353,7 @@ function Conversation({ session }) {
               <ChatComposer
                 session={session}
                 active={active}
+                paused={paused}
                 alive={running}
                 resumable={resumable && !active}
                 stopping={stopping}

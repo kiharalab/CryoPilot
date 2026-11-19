@@ -35,7 +35,7 @@ if "__compiled__" not in globals():
     sys.path.insert(0, str(RECONSTRUCTION_ROOT))
     sys.path.insert(0, str(DRIVER_DIR))
 
-from protocol import CommandReader, Emitter, redirect_stdout_to_stderr  # noqa: E402
+from protocol import CommandReader, Emitter, RunGate, redirect_stdout_to_stderr  # noqa: E402
 
 emitter = Emitter()
 redirect_stdout_to_stderr()
@@ -254,13 +254,22 @@ def start_resume(args: argparse.Namespace, store: SessionStore, reader: CommandR
     return session_id
 
 
+def report_usage(record: dict) -> None:
+    # An Ollama model runs on this computer, through the OpenAI client.
+    provider = "ollama" if getattr(H.client, "native", True) is False else getattr(H.client, "provider", None)
+    emitter.emit("usage", provider=provider, **record)
+
+
 def main() -> int:
     args = parse_args()
     if not args.new and not args.resume:
         status("error", "Either --new or --resume is required")
         return 2
     signal.signal(signal.SIGINT, signal.default_int_handler)
-    reader = CommandReader()
+    gate = RunGate(status)
+    H.before_model_request = gate.hold
+    H.on_model_usage = report_usage
+    reader = CommandReader(gate)
     store = SessionStore(args.session_db)
     session_id = None
     try:

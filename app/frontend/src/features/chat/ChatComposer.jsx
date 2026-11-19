@@ -10,6 +10,7 @@ import { Composer } from '../../components/Composer'
 import { Button, IconButton, Tip } from '../../components/ui'
 import { AttachMenu, attachmentChip } from '../attachments/AttachMenu'
 import { effortLabel } from '../new/AgentChips'
+import { SpendingControl } from './SpendingControl'
 
 /** The button that fixes a missing credential, by the service the server names in `err.setup`. */
 export const SETUP_ACTIONS = {
@@ -40,7 +41,8 @@ function writeDraft(sessionId, text) {
   }
 }
 
-function placeholderFor(kind, { active, alive, resumable, reconstructionSupported }) {
+function placeholderFor(kind, { active, paused, alive, resumable, reconstructionSupported }) {
+  if (paused) return 'Paused at the spending limit'
   if (active) return 'The agent is working. Stop it to send a new message.'
   if (!alive) {
     if (kind === 'reconstruction' && reconstructionSupported === false) {
@@ -76,7 +78,7 @@ function modelChoice(session) {
 }
 
 /**
- * session, active (a turn is running), alive (the agent process is up),
+ * session, active (a turn is running), paused (a turn is held at the spending limit), alive (the agent process is up),
  * resumable (a stopped reconstruction can finish its interrupted turn),
  * userCount (user messages in the transcript so far), onStop(), and
  * onSent({text, attachments, baseline}) after the server accepted a message;
@@ -85,7 +87,7 @@ function modelChoice(session) {
  * Ref: {focus()}
  */
 export const ChatComposer = forwardRef(function ChatComposer(
-  { session, active, alive, resumable = false, stopping, userCount = 0, onSent, onStop },
+  { session, active, paused = false, alive, resumable = false, stopping, userCount = 0, onSent, onStop },
   ref,
 ) {
   const patchSession = useApp((state) => state.patchSession)
@@ -95,6 +97,7 @@ export const ChatComposer = forwardRef(function ChatComposer(
   const [attachments, setAttachments] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [spendingOpen, setSpendingOpen] = useState(false)
   const composerRef = useRef(null)
   const modeling = session.kind === 'modeling'
 
@@ -132,7 +135,7 @@ export const ChatComposer = forwardRef(function ChatComposer(
       setDraft('')
       setAttachments([])
     } catch (err) {
-      setError({ message: err.message, setup: err.setup })
+      setError({ message: err.message, setup: err.setup, spendingLimit: Boolean(err.data?.spending_limit) })
     } finally {
       setBusy(false)
     }
@@ -151,6 +154,11 @@ export const ChatComposer = forwardRef(function ChatComposer(
               {SETUP_ACTIONS[error.setup] || 'Open settings'}
             </Button>
           ) : null}
+          {error.spendingLimit ? (
+            <Button size="sm" variant="secondary" onClick={() => setSpendingOpen(true)} className="-my-0.5">
+              Change the limit
+            </Button>
+          ) : null}
           <IconButton icon={X} label="Dismiss" size="xs" onClick={() => setError(null)} className="-mr-1" />
         </div>
       ) : null}
@@ -160,23 +168,26 @@ export const ChatComposer = forwardRef(function ChatComposer(
         onChange={setDraft}
         onSubmit={submit}
         canSubmit={Boolean(draft.trim()) || (modeling && attachments.length > 0)}
-        running={active}
+        running={active || paused}
         onStop={stopping ? undefined : onStop}
         busy={busy}
         autoFocus
         attachments={chips}
         onRemoveAttachment={modeling ? removeAttachment : undefined}
-        placeholder={placeholderFor(session.kind, { active, alive, resumable, reconstructionSupported })}
+        placeholder={placeholderFor(session.kind, { active, paused, alive, resumable, reconstructionSupported })}
         toolbarLeft={modeling ? <AttachMenu projectId={session.project_id} onAttach={addAttachment} disabled={busy} /> : null}
         toolbarRight={
-          model || effort ? (
-            <Tip label="Model and reasoning effort for this session">
-              <span className={cx('mr-1 inline-flex min-w-0 select-none items-center gap-1.5 text-xs text-faint', !modeling && 'pl-2')}>
-                {model ? <span className="truncate">{model}</span> : null}
-                {effort ? <span className="shrink-0">{effortLabel(effort)}</span> : null}
-              </span>
-            </Tip>
-          ) : null
+          <>
+            <SpendingControl session={session} open={spendingOpen} onOpenChange={setSpendingOpen} />
+            {model || effort ? (
+              <Tip label="Model and reasoning effort for this session">
+                <span className={cx('mr-1 inline-flex min-w-0 select-none items-center gap-1.5 text-xs text-faint', !modeling && 'pl-2')}>
+                  {model ? <span className="truncate">{model}</span> : null}
+                  {effort ? <span className="shrink-0">{effortLabel(effort)}</span> : null}
+                </span>
+              </Tip>
+            ) : null}
+          </>
         }
       />
     </div>

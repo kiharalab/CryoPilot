@@ -358,6 +358,46 @@ class HarnessTraceReader:
             nodes.append(node)
         return nodes
 
+    def last_assistant_text(self, session_id: str) -> str:
+        """The agent's newest message in the main conversation, or an empty string."""
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT payload_json FROM conversation_items WHERE session_id = ? AND origin = 'model' "
+                "ORDER BY sequence DESC LIMIT 50",
+                (session_id,),
+            )
+            for row in rows:
+                payload = _loads(row["payload_json"])
+                if isinstance(payload, dict) and payload.get("role") == "assistant":
+                    text = _content_text(payload.get("content")).strip()
+                    if text:
+                        return text
+        return ""
+
+    def raw_items(self, session_id: str):
+        """Every item of the main conversation, whole, in order: (origin, payload, created_at)."""
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT origin, payload_json, created_at FROM conversation_items WHERE session_id = ? ORDER BY sequence",
+                (session_id,),
+            )
+            for row in rows:
+                yield row["origin"], _loads(row["payload_json"]), row["created_at"]
+
+    def raw_recursive_items(self, session_id: str, call_id: int):
+        """Every item of one sub-agent's conversation, whole, in order."""
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT origin, payload_json, created_at FROM recursive_items "
+                "WHERE session_id = ? AND call_id = ? ORDER BY sequence",
+                (session_id, call_id),
+            )
+            for row in rows:
+                yield row["origin"], _loads(row["payload_json"]), row["created_at"]
+
     def known_jobs(self, session_id: str) -> list[dict[str, Any]]:
         with self._connect() as connection:
             row = connection.execute(

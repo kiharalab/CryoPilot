@@ -39,13 +39,15 @@ function statusFromRuntime(runtime) {
 
 /**
  * Returns {status, items, events, recursiveCalls, pending, loading, error,
- * agentError, lastTurn, activeSince, refresh, reload}.
+ * agentError, lastTurn, activeSince, connected, refresh, reload}.
  *   items/recursiveCalls  reconstruction transcript (trace.py nodes)
  *   events                modeling events
  *   pending               streaming modeling text {reasoning, answer}
  *   error                 the history could not be loaded
  *   agentError            an error the agent reported on the live feed
- *   activeSince           ms timestamp when this view saw the agent start working
+ *   activeSince           ms timestamp when this view saw the agent start working; a pause keeps it
+ *   resumedAt             ms timestamp when a pause at the spending limit last ended
+ *   connected             the live feed is up; while it is down, status may be out of date
  */
 export function useSessionStream(session) {
   const sessionId = session?.id
@@ -60,12 +62,15 @@ export function useSessionStream(session) {
   const [agentError, setAgentError] = useState('')
   const [lastTurn, setLastTurn] = useState(null)
   const [activeSince, setActiveSince] = useState(null)
+  const [connected, setConnected] = useState(true)
+  const [resumedAt, setResumedAt] = useState(null)
   const [attempt, setAttempt] = useState(0)
 
   const cursorRef = useRef(0)
   // null until the first status event: a snapshot of a turn already under
   // way does not tell when that turn started.
   const activeRef = useRef(null)
+  const pausedRef = useRef(false)
   // Streaming deltas arrive per token; they are buffered and flushed once per frame.
   const deltaRef = useRef({ reasoning: '', answer: '' })
   const frameRef = useRef(0)
@@ -107,6 +112,7 @@ export function useSessionStream(session) {
     setPending(EMPTY_PENDING)
     setError('')
     setAgentError('')
+    setConnected(true)
     setLoading(true)
 
     const flushDeltas = () => {
@@ -133,13 +139,15 @@ export function useSessionStream(session) {
     const onStatus = (event) => {
       const next = { state: event.state || 'stopped', detail: event.detail || '', running: Boolean(event.running) }
       const active = next.running && isActiveState(next.state)
-      if (active && activeRef.current === false) setActiveSince(Date.now())
-      if (!active) {
-        setActiveSince(null)
-        clearPending()
-      }
+      // A pause at the spending limit holds the turn; it does not end it.
+      const inTurn = active || (next.running && next.state === 'paused')
+      if (inTurn && activeRef.current === false) setActiveSince(Date.now())
+      if (!inTurn) setActiveSince(null)
+      if (!active) clearPending()
       if (active) setAgentError('')
-      activeRef.current = active
+      if (active && pausedRef.current) setResumedAt(Date.now())
+      pausedRef.current = next.running && next.state === 'paused'
+      activeRef.current = inTurn
       setStatus(next)
       // "stopped" only says no process is attached; keep the session's own
       // last state (completed, error, ...) as its status.
@@ -187,6 +195,9 @@ export function useSessionStream(session) {
         case 'session':
           if (event.session) useApp.getState().patchSession(event.session)
           break
+        case 'usage':
+          useApp.getState().patchSession({ id: sessionId, usage: event.usage })
+          break
         case 'error':
           setAgentError(event.message || 'The agent reported an error.')
           break
@@ -203,6 +214,7 @@ export function useSessionStream(session) {
       source.onmessage = handle
       source.onopen = () => {
         failures = 0
+        setConnected(true)
         refreshTail()
       }
       source.onerror = () => {
@@ -210,6 +222,7 @@ export function useSessionStream(session) {
         source = null
         if (cancelled) return
         failures += 1
+        setConnected(false)
         const retry = () => {
           if (!cancelled) retryTimer = window.setTimeout(connect, Math.min(10_000, 1000 * 2 ** Math.min(failures - 1, 4)))
         }
@@ -287,6 +300,8 @@ export function useSessionStream(session) {
     agentError,
     lastTurn,
     activeSince,
+    resumedAt,
+    connected,
     refresh: refreshTail,
     reload,
   }

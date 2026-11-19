@@ -14,6 +14,7 @@ import {
   FileText,
   FlipHorizontal2,
   Gauge,
+  Globe,
   Hourglass,
   Image,
   Layers,
@@ -153,6 +154,14 @@ export function describeStep(step, { running = false } = {}) {
     }
     if (step.name === 'view_image') {
       return { icon: Image, text: running ? 'Viewing' : 'Viewed', target: base(args.image_path), mono: true }
+    }
+    if (step.name === 'web_search') {
+      const papers = args.source === 'papers'
+      const verb = papers ? (running ? 'Searching papers for' : 'Searched papers for') : running ? 'Searching the web for' : 'Searched the web for'
+      return { icon: Search, text: verb, target: args.query || '' }
+    }
+    if (step.name === 'web_fetch') {
+      return { icon: Globe, text: running ? 'Reading' : 'Read', target: args.url || '', mono: true }
     }
     return { icon: Wrench, text: humanize(step.name), target: firstStringArgument(args), mono: true }
   }

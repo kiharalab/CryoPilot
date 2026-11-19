@@ -60,6 +60,17 @@ export function App() {
     check()
   }, [check])
 
+  // A link from an alert (?session=<id>) opens that session, once, after sign-in.
+  useEffect(() => {
+    if (!auth?.authenticated) return
+    const url = new URL(window.location.href)
+    const sessionId = url.searchParams.get('session')
+    if (!sessionId) return
+    url.searchParams.delete('session')
+    window.history.replaceState(null, '', url)
+    useApp.getState().openSession(sessionId)
+  }, [auth?.authenticated])
+
   useEffect(() => onUnauthorized(() => setAuth((current) => (current ? { ...current, authenticated: false } : current))), [])
 
   useEffect(() => {

@@ -542,3 +542,51 @@ def test_short_tokens_are_refused(monkeypatch, capsys):
     monkeypatch.setattr(serve, "check_python_dependencies", lambda: None)
     assert serve.main(["--no-open", "--no-build"]) == 2
     assert "at least 22 characters" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------- experimental features
+def test_experimental_setting_round_trip(client):
+    try:
+        assert client.get("/api/setup").json()["experimental"] == {"enabled": False}
+        saved = client.put("/api/settings", json={"experimental": {"enabled": True}}).json()
+        assert saved["experimental"] == {"enabled": True}
+        assert client.get("/api/setup").json()["experimental"]["enabled"] is True
+    finally:
+        store.set_setting("experimental", {})
+
+
+def test_web_tools_flag_reaches_only_the_reconstruction_agent(monkeypatch):
+    # A value exported where the server started cannot turn the tools on.
+    monkeypatch.setenv("CRYOPILOT_WEB_TOOLS", "1")
+    assert processes._base_env(driver_env("reconstruction"))["CRYOPILOT_WEB_TOOLS"] == "0"
+    assert driver_env("reconstruction", web_tools=True)["CRYOPILOT_WEB_TOOLS"] == "1"
+    assert "CRYOPILOT_WEB_TOOLS" not in driver_env("modeling", web_tools=True)
+
+
+def test_a_session_resumes_with_the_experimental_setting_it_started_with(client, monkeypatch, sandbox):
+    session, _, started = _resume_fixture(monkeypatch, sandbox, provider="ollama")
+    store.update_session(session["id"], config={**session["config"], "experimental": True})
+    store.set_setting("experimental", {"enabled": False})
+    client.post(f"/api/sessions/{session['id']}/start")
+    assert started["env"]["CRYOPILOT_WEB_TOOLS"] == "1"
+
+    other, _, started_other = _resume_fixture(monkeypatch, sandbox, provider="ollama")
+    store.set_setting("experimental", {"enabled": True})
+    try:
+        client.post(f"/api/sessions/{other['id']}/start")
+    finally:
+        store.set_setting("experimental", {})
+    # Sessions from before the setting, or started with it off, stay without web tools.
+    assert started_other["env"]["CRYOPILOT_WEB_TOOLS"] == "0"
+
+
+def test_import_records_the_experimental_setting(client, monkeypatch):
+    project = make_project("Import experimental")
+    monkeypatch.setattr(main.trace_reader, "session", lambda harness_id: {"manifest": {}, "project_uid": "P1", "workspace_uid": "W1"})
+    store.set_setting("experimental", {"enabled": True})
+    try:
+        imported = client.post(f"/api/projects/{project['id']}/sessions/reconstruction/import", json={"harness_session_id": "h-exp"})
+    finally:
+        store.set_setting("experimental", {})
+    assert imported.status_code == 200, imported.text
+    assert imported.json()["config"]["experimental"] is True

@@ -70,6 +70,33 @@ export function isActiveState(state) {
   return ACTIVE_STATES.has(state)
 }
 
+/**
+ * The state to show for a session. Without a live agent nothing can be working
+ * or waiting, whatever the session's last recorded status says. This is the one
+ * place that decides it, so the sidebar, the header, and a reload all agree.
+ */
+export function sessionState(session) {
+  if (session?.runtime?.running) return session.runtime.state || 'running'
+  const status = session?.status
+  return isActiveState(status) || status === 'paused' || status === 'idle' ? 'stopped' : status
+}
+
+/** "$3.21", or "under $0.01" for a little more than nothing. */
+export function formatUsd(value) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return ''
+  if (amount > 0 && amount < 0.01) return 'under $0.01'
+  return `$${amount.toFixed(2)}`
+}
+
+/** "812", "48.2K", "1.31M". */
+export function formatTokens(value) {
+  const count = Number(value) || 0
+  if (count < 1000) return String(count)
+  if (count < 1_000_000) return `${(count / 1000).toFixed(count < 100_000 ? 1 : 0)}K`
+  return `${(count / 1_000_000).toFixed(2)}M`
+}
+
 /** Short human label for an agent state. */
 export function stateLabel(state) {
   switch (state) {
@@ -82,7 +109,9 @@ export function stateLabel(state) {
     case 'initializing':
       return 'Setting up the CryoSPARC project'
     case 'idle':
-      return 'Waiting for you'
+      return 'Waiting for your message'
+    case 'paused':
+      return 'Paused at the spending limit'
     case 'completed':
       return 'Done'
     case 'interrupted':

@@ -92,6 +92,46 @@ class ModelRefusal(RuntimeError):
     """The model declined the request."""
 
 
+def usage_record(usage, model):
+    """One response's tokens, in the same terms for every provider. None without usage.
+
+    ``input_tokens`` counts input neither read from nor written to a cache.
+    Claude reports its counts apart; the OpenAI format, which the modeling
+    agent's Claude model also returns, includes them in ``input_tokens``. A
+    cache write is short (OpenAI's 30 minutes, Claude's 5) or long (Claude's 1
+    hour), because the two have different prices.
+    """
+
+    if usage is None:
+        return None
+
+    def count(source, name):
+        value = source.get(name) if isinstance(source, dict) else getattr(source, name, None)
+        return value if isinstance(value, int) else 0
+
+    if count(usage, "cache_read_input_tokens") or hasattr(usage, "cache_creation_input_tokens"):
+        written = count(usage, "cache_creation_input_tokens")
+        creation = getattr(usage, "cache_creation", None)
+        # CryoPilot asks Claude for the 1 hour cache, so a total without its breakdown is that.
+        long_writes = count(creation, "ephemeral_1h_input_tokens") if creation is not None else written
+        cached = count(usage, "cache_read_input_tokens")
+        uncached = count(usage, "input_tokens")
+    else:
+        details = getattr(usage, "input_tokens_details", None)
+        cached = count(details, "cached_tokens")
+        written = count(details, "cache_write_tokens")
+        long_writes = count(details, "cache_write_long_tokens")
+        uncached = max(0, count(usage, "input_tokens") - cached - written)
+    return {
+        "model": str(model or ""),
+        "input_tokens": uncached,
+        "cached_tokens": cached,
+        "cache_write_tokens": max(0, written - long_writes),
+        "cache_write_long_tokens": long_writes,
+        "output_tokens": count(usage, "output_tokens"),
+    }
+
+
 def provider_for_model(model):
     """The provider that serves a model name: Claude models run on Anthropic."""
 

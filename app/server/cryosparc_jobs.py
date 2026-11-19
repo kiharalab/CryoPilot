@@ -361,6 +361,12 @@ def parse_job(doc: dict[str, Any]) -> dict[str, Any]:
         "status": str(doc.get("status") or ""),
         "created_at": _iso(doc.get("created_at")),
         "completed_at": _iso(doc.get("completed_at")),
+        # When it entered each state, and why the scheduler is holding it, for the live status line.
+        "queued_at": _iso(doc.get("queued_at")),
+        "started_at": _iso(doc.get("started_at")),
+        "running_at": _iso(doc.get("running_at")),
+        "waiting_at": _iso(doc.get("waiting_at")),
+        "queue_message": str(doc.get("queue_message") or "") or None,
         "workspace_uids": [str(uid) for uid in doc.get("workspace_uids") or []],
         "parents": [str(uid) for uid in doc.get("parents") or []],
         "is_final_result": bool(doc.get("is_final_result")),
@@ -369,6 +375,87 @@ def parse_job(doc: dict[str, Any]) -> dict[str, Any]:
         "resolution_from": None,
         "volumes": volumes_found,
     }
+
+
+# FSC curves CryoSPARC records: label, curve field, and the prefix of its resolution fields.
+FSC_CURVES = (
+    ("No mask", "fsc_nomask", "radwn_nomask"),
+    ("Spherical mask", "fsc_sphericalmask", "radwn_sphericalmask"),
+    ("Loose mask", "fsc_loosemask", "radwn_loosemask"),
+    ("Tight mask", "fsc_resmask", "radwn_resmask"),
+    ("Auto-tightened mask", "fsc_autotight", "radwn_autotight"),
+    ("Auto-tightened, noise substituted", "fsc_autotight_noisesub", "radwn_autotight_noisesub"),
+)
+
+
+def job_details(doc: dict[str, Any]) -> dict[str, Any]:
+    """What a run report needs from a job document, beyond ``parse_job``."""
+
+    spec = doc.get("spec") if isinstance(doc.get("spec"), dict) else {}
+    outputs = spec.get("outputs") if isinstance(spec.get("outputs"), dict) else {}
+    counts = {name: group.get("num_items") for name, group in outputs.items() if isinstance(group, dict) and group.get("num_items")}
+    # Only job.json has the parameters that were set; the API returns every parameter with its value.
+    params_spec = doc.get("params_spec") if isinstance(doc.get("params_spec"), dict) else {}
+    params = {
+        name: entry["value"]
+        for name, entry in params_spec.items()
+        if isinstance(entry, dict) and "value" in entry and name != "random_seed_default"
+    }
+    all_params = spec.get("params") if isinstance(spec.get("params"), dict) else {}
+    stats: dict[str, Any] = {}
+    for group in _volume_groups(doc):
+        group_stats = group["stats"] if isinstance(group["stats"], dict) else {}
+        if group_stats:
+            stats = group_stats
+            break
+    fsc = stats.get("fsc_info_best") or stats.get("fsc_info")
+    fsc = fsc if isinstance(fsc, dict) else {}
+    resolutions = []
+    for label, _curve, prefix in FSC_CURVES:
+        at_143 = _number(fsc.get(f"{prefix}_A"))
+        if at_143 is not None and at_143 > 0:
+            resolutions.append({"mask": label, "fsc_0143_A": at_143, "fsc_05_A": _number(fsc.get(f"{prefix}_05_A"))})
+    instance = doc.get("instance_information") if isinstance(doc.get("instance_information"), dict) else {}
+    gpus = instance.get("gpu_info") if isinstance(instance.get("gpu_info"), list) else []
+    return {
+        "version": str(doc.get("version") or "") or None,
+        "params": params,
+        "all_params": all_params,
+        "counts": counts,
+        "fsc": resolutions,
+        "fsc_final_A": _number(fsc.get("radwn_final_A")),
+        "cfar": _number(stats.get("cfar")),
+        "guinier_b_factor": _number(stats.get("guinier_bfactor")),
+        "b_factor": _number(stats.get("b_factor")),
+        "validation_fsc_A": _number(stats.get("fsc_resolution")),
+        "box_size": fsc.get("N"),
+        "psize_A": _number(fsc.get("psize")),
+        "hostname": instance.get("platform_node"),
+        "gpus": sorted({str(gpu.get("name")) for gpu in gpus if isinstance(gpu, dict) and gpu.get("name")}),
+    }
+
+
+def fsc_curves(doc: dict[str, Any]) -> dict[str, Any] | None:
+    """A refinement's FSC curves against resolution (1/Å), for plotting."""
+
+    for group in _volume_groups(doc):
+        stats = group["stats"] if isinstance(group["stats"], dict) else {}
+        fsc = stats.get("fsc_info_best") or stats.get("fsc_info")
+        if not isinstance(fsc, dict) or not isinstance(fsc.get("radwns"), list):
+            continue
+        box = _number(fsc.get("N"))
+        psize = _number(fsc.get("psize"))
+        if not box or not psize:
+            continue
+        frequencies = [round(float(radius) / (box * psize), 5) for radius in fsc["radwns"]]
+        curves = [
+            {"label": label, "values": [round(float(value), 4) for value in fsc[field]]}
+            for label, field, _prefix in FSC_CURVES
+            if isinstance(fsc.get(field), list) and len(fsc[field]) == len(frequencies)
+        ]
+        if curves:
+            return {"frequency": frequencies, "curves": curves}
+    return None
 
 
 def _uid_number(uid: str) -> int:
@@ -761,6 +848,63 @@ def list_jobs(session: dict[str, Any]) -> dict[str, Any]:
     if warning:
         payload["warning"] = warning
     return payload
+
+
+def report_jobs(session: dict[str, Any]) -> dict[str, Any]:
+    """Jobs of the session's workspace for a run report, oldest first, each with its ``job_details``.
+
+    The project folder comes first because only job.json records which
+    parameters were set. Without it, the jobs come from the CryoSPARC API.
+    """
+
+    bound = _require_binding(session)
+    credentials = _credentials_for(bound)
+    local, reported = _project_dir(bound, credentials)
+    docs: list[dict[str, Any]] = []
+    source = None
+    if local is not None:
+        for entry in local.iterdir():
+            if JOB_UID.match(entry.name):
+                doc = _read_json(entry / "job.json")
+                if doc is not None and JOB_UID.match(str(doc.get("uid") or "")):
+                    docs.append(doc)
+        source = "filesystem"
+    elif credentials is not None:
+        try:
+            docs = cryosparc_bridge.job_documents(credentials, bound.project_uid, bound.workspace_uid)
+        except Exception as exc:
+            raise CryoSPARCError(502, f"CryoSPARC did not list the jobs of {bound.project_uid}: {_short(exc)}")
+        source = "api"
+    else:
+        raise CryoSPARCError(
+            400,
+            _sign_in_message(bound, f"to read the jobs of {bound.project_uid}; its project folder is not readable from this computer"),
+            setup="cryosparc",
+        )
+    documents = {}
+    jobs = []
+    for doc in docs:
+        job = parse_job(doc)
+        if job["deleted"]:
+            continue
+        if source == "filesystem" and bound.workspace_uid and job["workspace_uids"] and bound.workspace_uid not in job["workspace_uids"]:
+            continue
+        job.update(job_details(doc))
+        documents[job["uid"]] = doc
+        jobs.append(job)
+    _inherit_resolution(jobs)
+    for job in jobs:
+        for volume in job["volumes"]:
+            _annotate(volume, local)
+    jobs.sort(key=lambda job: _uid_number(job["uid"]))
+    return {
+        "project_uid": bound.project_uid,
+        "workspace_uid": bound.workspace_uid,
+        "project_dir": str(local) if local is not None else reported,
+        "source": source,
+        "jobs": jobs,
+        "documents": documents,
+    }
 
 
 def _job(bound: Binding, credentials: tuple[str, str, str] | None, local: Path | None, job_uid: str) -> dict[str, Any]:

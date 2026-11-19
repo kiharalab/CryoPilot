@@ -334,6 +334,17 @@ export function buildModelingBlocks(events) {
   return { blocks: groupAtoms(atoms), userCount, lastUserAt }
 }
 
+/** The step the agent is on: the newest step of the transcript, when it has no result yet. */
+export function pendingStep(blocks) {
+  const last = blocks[blocks.length - 1]
+  if (last?.type === 'step') return last.step.result ? null : last.step
+  if (last?.type === 'group') {
+    const entry = last.entries[last.entries.length - 1]
+    return entry?.type === 'step' && !entry.step.result ? entry.step : null
+  }
+  return null
+}
+
 // ------------------------------------------------------------- stability
 function callSignature(call) {
   return `${call.id}.${call.status}.${call.completed_at || ''}.${call.metrics?.tool_calls ?? ''}`

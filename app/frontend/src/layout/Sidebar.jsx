@@ -1,6 +1,6 @@
 // Left sidebar: project switcher, new session, the project's sessions, and
 // settings with the connection status of each service.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Atom,
   ChevronsUpDown,
@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { cx } from '../lib/cx'
-import { toDate } from '../lib/format'
+import { isActiveState, sessionState, toDate } from '../lib/format'
 import { modKeyLabel } from '../lib/platform'
 import { useApp } from '../store/app'
 import { ConfirmDialog, IconButton, Kbd, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, StatusDot, Tip } from '../components/ui'
@@ -26,11 +26,6 @@ import { SERVICE_NAMES, defaultModelServices } from '../features/setup/services'
 import { Wordmark } from './Brand'
 
 export const SESSION_ICONS = { reconstruction: Waypoints, modeling: Atom }
-
-function sessionState(session) {
-  if (session.runtime?.running) return session.runtime.state || 'running'
-  return session.status
-}
 
 /** Each service the agents use, and whether CryoPilot can use it now. */
 function serviceStatus(setup) {
@@ -60,6 +55,9 @@ function groupByDate(sessions) {
   return groups.filter((group) => group.items.length)
 }
 
+/** How often the sidebar checks on sessions that are not open. */
+const SESSIONS_POLL_MS = 15000
+
 export function Sidebar() {
   const project = useApp((state) => state.project)
   const projects = useApp((state) => state.projects)
@@ -73,6 +71,20 @@ export function Sidebar() {
   const toast = useApp((state) => state.toast)
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+
+  const projectId = project?.id
+  useEffect(() => {
+    if (!projectId) return undefined
+    const check = () => {
+      if (!document.hidden) useApp.getState().refreshSessions().catch(() => {})
+    }
+    const timer = window.setInterval(check, SESSIONS_POLL_MS)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [projectId])
 
   const sessions = useMemo(
     () =>
@@ -199,7 +211,7 @@ function ConnectionDots({ services }) {
 function SessionRow({ session, selected, onOpen }) {
   const Icon = SESSION_ICONS[session.kind] || Waypoints
   const state = sessionState(session)
-  const working = session.runtime?.running && ['running', 'starting', 'connecting', 'initializing'].includes(state)
+  const working = isActiveState(state)
   const patchSession = useApp((s) => s.patchSession)
   const removeSession = useApp((s) => s.removeSession)
   const toast = useApp((s) => s.toast)
@@ -259,7 +271,11 @@ function SessionRow({ session, selected, onOpen }) {
         <button type="button" onClick={onOpen} className="flex h-full min-w-0 flex-1 items-center gap-2.5 pl-2.5 text-left">
           <Icon size={15} strokeWidth={1.75} className="shrink-0 opacity-70" />
           <span className="min-w-0 flex-1 truncate">{session.title}</span>
-          {working ? <StatusDot state="running" className="mr-1" /> : state === 'error' ? <StatusDot state="error" className="mr-1" /> : null}
+          {working ? (
+            <StatusDot state="running" className="mr-1" />
+          ) : state === 'error' || state === 'paused' ? (
+            <StatusDot state={state} className="mr-1" />
+          ) : null}
         </button>
       )}
       {!renaming ? (

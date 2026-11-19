@@ -232,6 +232,8 @@ The window has three columns, and you can drag each divider:
 
 A reconstruction session starts from the dataset paths, the acquisition parameters, and your goal. A modeling session starts from a request in your own words. You can attach maps that your reconstruction sessions produced, or files from your computer. In **Settings** you can switch between the two processing guides (the general guide and the CryoSPARC v5 guide), change the default models, and sign in to each service again.
 
+The message box shows what each session has cost so far, estimated from the providers' list prices. **Settings → Spending** sets a limit for new sessions: a session that reaches it pauses before its next model request, and keeps all its work until you raise the limit. **Settings → Alerts** sends a message to a Slack-style webhook or by email when a run finishes, asks a question, fails, or pauses; nothing is sent until you add a destination, and the agent's own words go along only if you turn that on. **Run report and transcript**, in a session's menu, shows the final map or model with its FSC or validation numbers, the jobs and parameters that led to it, the software versions, the cost, and a draft Methods paragraph, and downloads the report and the whole conversation.
+
 Because CryoPilot runs on the CryoSPARC machine, you will usually open it from your own computer. Forward the port over SSH, then open the printed link:
 
 ```bash

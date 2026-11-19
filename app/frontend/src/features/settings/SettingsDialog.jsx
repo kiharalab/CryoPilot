@@ -1,7 +1,7 @@
 // The settings dialog: a section list on the left and the section on the
 // right. Every control saves as soon as it changes. Open it with
 // openSettings(section) from anywhere; ⌘, opens General.
-import { Atom, ExternalLink, Info, KeyRound, Monitor, Moon, SlidersHorizontal, Sun, Waypoints } from 'lucide-react'
+import { Atom, Bell, CircleDollarSign, ExternalLink, FlaskConical, Info, KeyRound, Monitor, Moon, SlidersHorizontal, Sun, Waypoints } from 'lucide-react'
 import { cx } from '../../lib/cx'
 import { modKeyLabel } from '../../lib/platform'
 import { useApp } from '../../store/app'
@@ -10,7 +10,9 @@ import { BrandMark } from '../../layout/Brand'
 import { systemName } from '../setup/services'
 import { Changelog, UpdateStatus } from '../update/UpdateNotice'
 import { AccountsSection } from './AccountsSection'
+import { AlertsSection, SpendingSection } from './AlertsSection'
 import { ModelingSection, ReconstructionSection } from './AgentSections'
+import { ExperimentalSection } from './ExperimentalSection'
 import { SettingsGroup, SettingsRow } from './controls'
 
 const SECTIONS = [
@@ -18,6 +20,9 @@ const SECTIONS = [
   { id: 'accounts', label: 'Accounts', icon: KeyRound, component: AccountsSection },
   { id: 'reconstruction', label: 'Reconstruction', icon: Waypoints, component: ReconstructionSection },
   { id: 'modeling', label: 'Modeling', icon: Atom, component: ModelingSection },
+  { id: 'alerts', label: 'Alerts', icon: Bell, component: AlertsSection },
+  { id: 'spending', label: 'Spending', icon: CircleDollarSign, component: SpendingSection },
+  { id: 'experimental', label: 'Experimental', icon: FlaskConical, component: ExperimentalSection },
   { id: 'about', label: 'About', icon: Info, component: AboutSection },
 ]
 

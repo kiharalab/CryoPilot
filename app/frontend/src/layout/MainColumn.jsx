@@ -1,10 +1,10 @@
 // Centre column: a slim header (title, state, panel toggles) over whatever
 // the current view is: the new-session screens or a conversation.
 import { useState } from 'react'
-import { ExternalLink, FolderPlus, MoreHorizontal, PanelLeftOpen, PanelRight, Pencil, RotateCcw, SquareTerminal, Trash2 } from 'lucide-react'
+import { ExternalLink, FileText, FolderPlus, MoreHorizontal, PanelLeftOpen, PanelRight, Pencil, RotateCcw, SquareTerminal, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { cx } from '../lib/cx'
-import { stateLabel } from '../lib/format'
+import { isActiveState, sessionState, stateLabel } from '../lib/format'
 import { useApp, useCurrentSession } from '../store/app'
 import { Button, ConfirmDialog, EmptyState, IconButton, Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, StatusDot } from '../components/ui'
 import { Home } from '../features/home/Home'
@@ -12,6 +12,7 @@ import { NewReconstruction } from '../features/new/NewReconstruction'
 import { NewModeling } from '../features/new/NewModeling'
 import { SessionView } from '../features/chat/SessionView'
 import { CreateProjectDialog } from '../features/project/CreateProjectDialog'
+import { ReportDialog } from '../features/report/ReportDialog'
 import { UpdateBanner } from '../features/update/UpdateNotice'
 import { SESSION_ICONS } from './Sidebar'
 import { BrandMark } from './Brand'
@@ -78,8 +79,8 @@ function MainHeader() {
 
 function SessionTitle({ session }) {
   const Icon = SESSION_ICONS[session.kind]
-  const state = session.runtime?.running ? session.runtime.state || 'running' : session.status
-  const working = session.runtime?.running && ['running', 'starting', 'connecting', 'initializing'].includes(state)
+  const state = sessionState(session)
+  const working = isActiveState(state)
   // A live agent process that is between turns; stopping it lets the next message start it with the current settings.
   const restartable = session.runtime?.running && ['idle', 'completed', 'interrupted', 'error'].includes(state)
   const patchSession = useApp((s) => s.patchSession)
@@ -90,6 +91,7 @@ function SessionTitle({ session }) {
   const [title, setTitle] = useState(session.title)
   const [confirm, setConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
 
   // The CryoSPARC this session ran on, which may not be the one in Settings (imported sessions, a changed URL).
   const cryosparcUrl = session.config?.agent?.cryosparc_url || session.harness?.cryosparc_url || setup?.cryosparc?.url
@@ -168,6 +170,9 @@ function SessionTitle({ session }) {
           <IconButton icon={MoreHorizontal} label="Session options" size="sm" tooltip={false} />
         </MenuTrigger>
         <MenuContent align="start" className="min-w-[200px]">
+          <MenuItem icon={FileText} onSelect={() => setReportOpen(true)}>
+            Run report and transcript
+          </MenuItem>
           <MenuItem icon={Pencil} onSelect={startEditing}>
             Rename
           </MenuItem>
@@ -195,6 +200,7 @@ function SessionTitle({ session }) {
         busy={busy}
         onConfirm={remove}
       />
+      <ReportDialog session={session} open={reportOpen} onOpenChange={setReportOpen} />
     </>
   )
 }

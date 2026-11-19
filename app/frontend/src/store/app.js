@@ -75,7 +75,7 @@ export const useApp = create((set, get) => ({
    */
   daqFocusPath: null,
   settingsOpen: false,
-  /** 'general' | 'accounts' | 'reconstruction' | 'modeling' | 'about' */
+  /** 'general' | 'accounts' | 'reconstruction' | 'modeling' | 'alerts' | 'spending' | 'about' */
   settingsSection: 'general',
   theme: readStorage(THEME_KEY, 'system'),
   resolvedTheme: document.documentElement.dataset.theme || 'light',
@@ -177,6 +177,22 @@ export const useApp = create((set, get) => ({
         set({ projectId: previous.projectId, project: previous.project, projectLoading: false })
       }
       throw err
+    }
+  },
+
+  /**
+   * Bring the sidebar up to date with sessions that are not open. Only the open
+   * session has a live feed, so the others would otherwise keep the state they
+   * had when the project loaded, and a finished run would look busy.
+   */
+  async refreshSessions() {
+    const { projectId, view } = get()
+    if (!projectId) return
+    const { sessions } = await api.projectSessions(projectId)
+    if (get().projectId !== projectId) return
+    const open = get().view.name === 'session' ? get().view.sessionId : view.name === 'session' ? view.sessionId : null
+    for (const session of sessions) {
+      if (session.id !== open) get().patchSession(session)
     }
   },
 

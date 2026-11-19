@@ -385,6 +385,7 @@ const DOT_TONES = {
   failed: 'bg-danger',
   killed: 'bg-danger',
   interrupted: 'bg-warning',
+  paused: 'bg-warning',
   queued: 'bg-warning',
   launched: 'bg-accent animate-pulse-dot',
   waiting: 'bg-warning',

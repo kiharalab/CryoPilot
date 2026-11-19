@@ -7,6 +7,7 @@ import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { basename, formatDuration, pluralize, toDate } from '../../lib/format'
 import { languageForFile } from '../../lib/highlight'
+import { useNow } from '../../hooks/useNow'
 import { useApp } from '../../store/app'
 import { CodeBlock } from '../../components/CodeBlock'
 import { Markdown } from '../../components/Markdown'
@@ -139,7 +140,16 @@ export const ThoughtRow = memo(function ThoughtRow({ block }) {
 
 // ==================================================================== step
 function StepStatus({ step, pending }) {
-  if (pending) return <Spinner size={13} className="shrink-0" />
+  if (pending) {
+    return (
+      <span className="flex shrink-0 items-center gap-1.5">
+        <StepElapsed since={step.startedAt} />
+        <Spinner size={13} />
+      </span>
+    )
+  }
+  // The agent went away during this step, so it never reported a result.
+  if (!step.result) return <span className="shrink-0 text-xs text-warning">Did not finish</span>
   if (step.outcome === 'error') return <span className="shrink-0 text-xs text-danger">Failed</span>
   if (step.outcome === 'interrupted') return <span className="shrink-0 text-xs text-warning">Interrupted</span>
   const duration = seconds(step.startedAt, step.endedAt)
@@ -184,9 +194,22 @@ function StepActions({ step }) {
   )
 }
 
+/** How long a step has been running, once that is long enough to wonder about. */
+function StepElapsed({ since }) {
+  const now = useNow(1000)
+  const started = toDate(since)?.getTime()
+  const elapsed = started ? Math.max(0, (now - started) / 1000) : 0
+  if (elapsed < 5) return null
+  return <span className="text-xs tabular-nums text-faint">{formatDuration(elapsed)}</span>
+}
+
 export const StepBlock = memo(function StepBlock({ step, live = false }) {
   const [open, setOpen] = useState(false)
-  const pending = !step.result && live
+  const { active, turnStart } = useChat()
+  // Any step of the current turn without a result is under way, not only the newest:
+  // tool calls can run side by side, and a sub-agent's steps are in a list of their own.
+  const started = toDate(step.startedAt)?.getTime() || 0
+  const pending = !step.result && (live || (active && started >= (turnStart || 0)))
   const { icon: Icon, text, target, mono, hint } = describeStep(step, { running: pending })
   const failed = step.outcome === 'error'
   return (
@@ -418,12 +441,15 @@ const SUBAGENT_POLL_MS = 5000
 
 /** A delegated sub-agent run: a folded row that opens into its own transcript. */
 export const SubAgent = memo(function SubAgent({ call }) {
-  const { sessionId } = useChat()
+  const { sessionId, active } = useChat()
   const calls = useCalls()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState(null)
   const [error, setError] = useState('')
-  const running = call.status === 'running'
+  // A sub-agent is recorded as running until its session next starts, so it
+  // cannot be running while the agent is not.
+  const running = call.status === 'running' && active
+  const abandoned = call.status === 'running' && !active
 
   useEffect(() => {
     if (!open) return undefined
@@ -452,7 +478,7 @@ export const SubAgent = memo(function SubAgent({ call }) {
     () => (items ? buildReconstructionBlocks(items, { sessionId, calls, nested: true, parentCallId: call.id }) : null),
     [items, sessionId, calls, call.id],
   )
-  const state = CALL_STATES[call.status]
+  const state = abandoned ? CALL_STATES.interrupted : CALL_STATES[call.status]
   const toolCalls = call.metrics?.tool_calls
   const duration = seconds(call.started_at, call.completed_at)
   const summary = running ? (toolCalls ? `${pluralize(toolCalls, 'tool call')} so far` : 'Starting') : plainFirstLine(call.final_output)

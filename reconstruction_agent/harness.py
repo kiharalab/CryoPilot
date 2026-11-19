@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Literal
 
 import llm_client
+import web_tools
 from cryosparc_repl import (
     CRYOSPARC_HELP,
     connect_cryosparc,
@@ -229,10 +230,25 @@ current_tool_invocation = contextvars.ContextVar("current_tool_invocation", defa
 evaluating_wait_condition = contextvars.ContextVar("evaluating_wait_condition", default=False)
 
 
+# Set by the web app's driver. The first runs before each model request and can
+# hold it while the run is paused; the second receives each response's tokens.
+before_model_request = None
+on_model_usage = None
+
+
 def create_response(**kwargs):
     if "input" in kwargs:
         kwargs["input"] = redact_persisted_value(kwargs["input"])
-    return client.create(**kwargs)
+    if before_model_request is not None:
+        before_model_request()
+    response = client.create(**kwargs)
+    if on_model_usage is not None:
+        record = llm_client.usage_record(
+            getattr(response, "usage", None), getattr(response, "model", None) or kwargs.get("model")
+        )
+        if record is not None:
+            on_model_usage(record)
+    return response
 
 
 def slugify_heading(title):
@@ -492,6 +508,11 @@ TOOLS = [
         "strict": False,
     },
 ]
+
+# Experimental: web search and page reading, when the app turns them on for this session.
+WEB_TOOLS_ENABLED = web_tools.enabled(os.environ)
+if WEB_TOOLS_ENABLED:
+    TOOLS = [*TOOLS, *web_tools.TOOL_SCHEMAS]
 
 
 RLM_INSTRUCTIONS = """
@@ -1902,6 +1923,8 @@ def call_tool(tool_call):
                 args["image_path"],
                 args.get("prompt") or "",
             )
+        elif name in web_tools.TOOL_NAMES and WEB_TOOLS_ENABLED:
+            result = web_tools.call(name, args)
         else:
             result = {"ok": False, "error": f"Unknown tool: {name}"}
     except BaseException as tool_error:

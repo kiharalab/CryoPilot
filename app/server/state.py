@@ -9,11 +9,12 @@ from __future__ import annotations
 import os
 import platform
 import threading
+import time
 from typing import Any
 
 from fastapi import HTTPException
 
-from . import cryozeta_bridge, guides
+from . import alerts, cryozeta_bridge, guides, pricing
 from .config import (
     APP_DB_PATH,
     DEFAULT_MODELING_MODEL,
@@ -31,6 +32,8 @@ from .trace import HarnessTraceReader, TraceError
 ensure_directories()
 
 store = AppStore(APP_DB_PATH)
+# No agent has survived a server stop, so nothing can still be working or paused.
+store.settle_unfinished_sessions(("starting", "connecting", "initializing", "running", "paused"))
 bus = EventBus()
 trace_reader = HarnessTraceReader(HARNESS_SESSION_DB)
 credentials = Credentials()
@@ -80,7 +83,16 @@ def defaults() -> dict[str, Any]:
         "modeling_model": saved.get("modeling_model") or DEFAULT_MODELING_MODEL,
         "modeling_effort": saved.get("modeling_effort") or DEFAULT_MODELING_EFFORT,
         "modeling_max_turns": int(saved.get("modeling_max_turns") or DEFAULT_MODELING_MAX_TURNS),
+        "spending_limit_usd": saved.get("spending_limit_usd"),
     }
+
+
+def experimental_settings() -> dict[str, Any]:
+    """Experimental features. Turned on, reconstruction sessions started from now
+    on get web search and page reading (reconstruction_agent/web_tools.py)."""
+
+    saved = store.get_setting("experimental", {}) or {}
+    return {"enabled": bool(saved.get("enabled"))}
 
 
 def processing_guide() -> str:
@@ -155,7 +167,7 @@ def cryozeta_credentials() -> tuple[str, str, str]:
     return settings["base_url"], settings["username"], password
 
 
-def driver_env(agent: str, *, guide: str | None = None) -> dict[str, str]:
+def driver_env(agent: str, *, guide: str | None = None, web_tools: bool = False) -> dict[str, str]:
     """Environment handed to an agent process: the API keys and the account
     that agent uses (CryoSPARC for reconstruction, CryoZeta for modeling).
     Empty values are not exported."""
@@ -181,13 +193,79 @@ def driver_env(agent: str, *, guide: str | None = None) -> dict[str, str]:
         )
     if guide:
         env["CRYOEM_GUIDE"] = guides.normalize(guide)
+    if agent == "reconstruction":
+        # Set either way, so a value exported where the server started cannot turn it on.
+        env["CRYOPILOT_WEB_TOOLS"] = "1" if web_tools else "0"
     return env
+
+
+# ------------------------------------------------------------------ usage
+def parse_spending_limit(value: Any) -> float | None:
+    """A spending limit from a form: dollars above zero, or nothing for no limit."""
+
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        limit = float(value)
+    except (TypeError, ValueError):
+        raise ValueError("The spending limit must be an amount in dollars.")
+    if not 0 < limit < 1_000_000:
+        raise ValueError("The spending limit must be more than $0.")
+    return round(limit, 2)
+
+
+def usage_view(session: dict[str, Any]) -> dict[str, Any]:
+    """What a session has used so far, its estimated cost, and its spending limit."""
+
+    rows = store.session_usage(session["id"])
+    cost = sum(row["cost_usd"] for row in rows)
+    unpriced = [row["model"] for row in rows if row["unpriced_requests"]]
+    limit = (session.get("config") or {}).get("spending_limit_usd")
+    return {
+        "requests": sum(row["requests"] for row in rows),
+        "input_tokens": sum(row["input_tokens"] for row in rows),
+        "cached_tokens": sum(row["cached_tokens"] for row in rows),
+        "cache_write_tokens": sum(row["cache_write_tokens"] for row in rows),
+        "output_tokens": sum(row["output_tokens"] for row in rows),
+        "cost_usd": cost,
+        "models": rows,
+        # Models without a listed price; the cost above leaves them out.
+        "unpriced_models": unpriced,
+        "limit_usd": limit,
+        "over_limit": limit is not None and cost >= limit,
+        "prices_as_of": pricing.PRICES_AS_OF,
+    }
+
+
+def require_within_limit(session: dict[str, Any]) -> None:
+    """Refuse to start more work on a session that has reached its spending limit."""
+
+    usage = usage_view(session)
+    if usage["over_limit"]:
+        raise api_error(
+            409,
+            f"This session has used about ${usage['cost_usd']:.2f} of its ${usage['limit_usd']:.2f} spending limit. Raise the limit to continue.",
+            spending_limit=True,
+        )
+
+
+def apply_spending_limit(session: dict[str, Any]) -> None:
+    """Tell a running agent where the session stands against its limit."""
+
+    usage = usage_view(session)
+    if usage["over_limit"]:
+        processes.pause(
+            session["id"], f"Spending limit reached: about ${usage['cost_usd']:.2f} of ${usage['limit_usd']:.2f}."
+        )
+    else:
+        processes.resume(session["id"])
 
 
 # ----------------------------------------------------------------- views
 def session_runtime_view(session: dict[str, Any]) -> dict[str, Any]:
     view = dict(session)
     view["runtime"] = processes.status(session["id"])
+    view["usage"] = usage_view(session)
     if session["kind"] == "reconstruction" and session.get("harness_session_id"):
         try:
             harness = trace_reader.session(session["harness_session_id"])
@@ -214,6 +292,10 @@ def on_driver_event(session_id: str, event: dict[str, Any]) -> None:
             updates["last_error"] = detail
         store.update_session(session_id, **updates)
         bus.publish(session_id, {"type": "status", "state": state, "detail": detail, "running": state not in {"stopped", "error"}})
+        _alert_on_status(session_id, state, detail)
+        return
+    if name == "usage":
+        _record_usage(session, event)
         return
     if name == "session":
         store.update_session(session_id, harness_session_id=event.get("harness_session_id"))
@@ -231,6 +313,7 @@ def on_driver_event(session_id: str, event: dict[str, Any]) -> None:
         return
     if name == "turn_end":
         bus.publish(session_id, {"type": "turn_end", "outcome": event.get("outcome")})
+        _alert_on_turn_end(session_id, event.get("outcome"))
         return
     if name == "user_turn_accepted":
         return
@@ -241,6 +324,93 @@ def on_driver_event(session_id: str, event: dict[str, Any]) -> None:
         return
     if name == "error":
         bus.publish(session_id, {"type": "error", "message": event.get("message")})
+
+
+def _record_usage(session: dict[str, Any], event: dict[str, Any]) -> None:
+    model = str(event.get("model") or "unknown")
+    store.add_usage(session["id"], model, event, pricing.estimate(model, event, event.get("provider")))
+    usage = usage_view(session)
+    bus.publish(session["id"], {"type": "usage", "usage": usage})
+    if usage["over_limit"]:
+        apply_spending_limit(session)
+
+
+# ----------------------------------------------------------------- alerts
+_turn_started: dict[str, float] = {}
+
+
+def _alert_settings() -> dict[str, Any]:
+    return store.get_setting("alerts", {}) or {}
+
+
+def _record_alert_result(result: dict[str, Any]) -> None:
+    settings = _alert_settings()
+    settings["last"] = result
+    store.set_setting("alerts", settings)
+
+
+alert_sender = alerts.AlertSender(settings=_alert_settings, secret=credentials.get, record=_record_alert_result)
+
+
+def alerts_view() -> dict[str, Any]:
+    return alerts.view(_alert_settings(), credentials.get, credentials.source)
+
+
+def _final_message(session: dict[str, Any]) -> str:
+    if session["kind"] == "modeling":
+        answers = [event for event in store.list_modeling_events(session["id"]) if event["kind"] == "answer"]
+        return str(answers[-1]["payload"].get("text") or "") if answers else ""
+    harness_id = session.get("harness_session_id")
+    if not harness_id:
+        return ""
+    try:
+        return trace_reader.last_assistant_text(harness_id)
+    except TraceError:
+        return ""
+
+
+def _queue_alert(session_id: str, event: str | None, *, detail: str = "", duration: float | None = None) -> None:
+    """Queue an alert. Without an event, the agent's final message decides which it is."""
+
+    def build() -> alerts.Alert | None:
+        try:
+            session = store.get_session(session_id)
+            project = store.get_project(session["project_id"])
+        except NotFound:
+            return None
+        message = detail or _final_message(session)
+        name = event or alerts.turn_end_event(message, duration)
+        if name is None:
+            return None
+        return alerts.Alert(
+            event=name,
+            session_id=session_id,
+            session=session["title"],
+            project=project["title"],
+            message=message,
+            duration=duration,
+            cost_usd=usage_view(session)["cost_usd"],
+        )
+
+    alert_sender.enqueue(build, on_failure=lambda text: on_driver_log(session_id, "alerts", text))
+
+
+def _alert_on_status(session_id: str, state: str, detail: str) -> None:
+    if state == "running":
+        _turn_started.setdefault(session_id, time.time())
+    elif state == "paused":
+        _queue_alert(session_id, "paused", detail=detail)
+    elif state == "stopped":
+        _turn_started.pop(session_id, None)
+    elif state == "error" and not shutting_down.is_set():
+        started = _turn_started.pop(session_id, None)
+        _queue_alert(session_id, "failed", detail=detail, duration=time.time() - started if started else None)
+
+
+def _alert_on_turn_end(session_id: str, outcome: Any) -> None:
+    started = _turn_started.pop(session_id, None)
+    if outcome == "completed":
+        _queue_alert(session_id, None, duration=time.time() - started if started else None)
 
 
 def on_driver_log(session_id: str, stream: str, text: str) -> None:

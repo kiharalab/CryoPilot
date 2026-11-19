@@ -83,6 +83,8 @@ export const api = {
   // body: {openai:{api_key}|{clear:true}, cryosparc:{url,email,password,clear_password},
   //        cryozeta:{base_url,username,password,clear_password}, processing_guide,
   //        remember_credentials, defaults:{...}} -> setup payload
+  // Sends a test alert to each destination set in Settings: {results:[{channel, ok, error?}], alerts}
+  testAlerts: () => request('/api/settings/alerts/test', { method: 'POST' }),
   saveSettings: (body) => request('/api/settings', { method: 'PUT', body }),
   testOpenai: () => request('/api/settings/openai/test', { method: 'POST' }),
   testAnthropic: () => request('/api/settings/anthropic/test', { method: 'POST' }),
@@ -113,8 +115,17 @@ export const api = {
   // Attachment: {type:'cryosparc_map', session_id, job_uid, name} | {type:'file', root, path}
   createModeling: (projectId, body) =>
     request(`/api/projects/${enc(projectId)}/sessions/modeling`, { method: 'POST', body }),
+  // Each session has .usage: {requests, input_tokens, cached_tokens, cache_write_tokens, output_tokens, cost_usd,
+  //   models:[...], unpriced_models:[model], limit_usd, over_limit, prices_as_of}
+  projectSessions: (projectId) => request(`/api/projects/${enc(projectId)}/sessions`),
   session: (id) => request(`/api/sessions/${enc(id)}`),
   renameSession: (id, title) => request(`/api/sessions/${enc(id)}`, { method: 'PATCH', body: { title } }),
+  // limit: dollars, or null for no limit. Raising it lets a paused agent continue.
+  setSpendingLimit: (id, limit) => request(`/api/sessions/${enc(id)}`, { method: 'PATCH', body: { spending_limit_usd: limit } }),
+  // {kind, title, markdown, methods, filename, final, fsc_curve:{frequency, curves:[{label, values}]}|null, usage, error}
+  sessionReport: (id) => request(`/api/sessions/${enc(id)}/report`),
+  sessionReportUrl: (id) => `/api/sessions/${enc(id)}/report.md`,
+  sessionTranscriptUrl: (id, format = 'md') => `/api/sessions/${enc(id)}/transcript.${format}`,
   deleteSession: (id) => request(`/api/sessions/${enc(id)}`, { method: 'DELETE' }),
   startSession: (id) => request(`/api/sessions/${enc(id)}/start`, { method: 'POST' }),
   // Modeling sessions also accept attachments with a follow-up message.

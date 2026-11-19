@@ -100,6 +100,55 @@ them. It cannot queue, change or delete jobs outside its own workspace. Earlier 
 project in the harness session database pass their last notes to it. This is the same as
 `harness.py --from-project` in the terminal. The **Maps** tab shows the new workspace's jobs only.
 
+### Cost and spending limit
+
+Each driver reports the tokens of every model response as a `usage` event (`harness.on_model_usage` in
+the reconstruction agent, `ResponseCompletedEvent` in the modeling driver). The server prices each
+response with `app/server/pricing.py`, which holds the providers' list prices and the date they were
+checked, and adds it to `session_usage` in the app database. A model without a listed price shows
+tokens only, and the spending limit cannot apply to it.
+
+A session copies the default limit from **Settings → Spending** when it starts; the cost figure in the
+message box changes it for that session. When the total reaches the limit, the server sends the driver
+`{"op": "pause"}`. The driver holds its next model request (`protocol.RunGate`, called from
+`harness.before_model_request` and from the modeling driver's `on_llm_start` hook), so a tool or
+CryoSPARC job under way finishes first and the agent keeps all of its state. Raising the limit sends
+`{"op": "resume"}`. The server refuses a new message or a resume while a session is over its limit.
+
+### Alerts
+
+**Settings → Alerts** sends an alert to a webhook or by email (`app/server/alerts.py`) when a run
+finishes, asks a question, fails, or pauses at its limit. Whether a finished turn is a question is
+read from the last paragraph of the agent's final message. A finished turn under 2 minutes does not
+alert; a stop from the app never does. Alerts are sent on their own thread with two retries, and a
+failure goes to the session's **Agent output** log. The webhook address and the mail password are
+secrets like the API keys: never sent to the browser or the agents. An alert links to
+`<server>/?session=<id>`, which opens that session after sign-in.
+
+### Run report and transcript
+
+**Run report and transcript** in the session menu builds a report from the records (`app/server/report.py`),
+with no model call. For a reconstruction it chooses the final refinement (marked as final in
+CryoSPARC, else named in the agent's last message, else the best resolution), follows its parents
+to list only the jobs that led to it, and reads each job's set parameters (`params_spec`) from
+`job.json`, its FSC values for each mask, and the jobs run on its result. For modeling it chooses the
+model the last message names and reports the validation of that same file (matched by checksum). Both
+end with a draft Methods paragraph, the software versions, and the cost. `transcript.md` and
+`transcript.jsonl` export the whole conversation, including sub-agents, without embedded images.
+
+### Experimental features
+
+Settings > Experimental turns on features that are still being tested. Today that is web search and
+page reading for the reconstruction agent (`reconstruction_agent/web_tools.py`): `web_search` reads
+DuckDuckGo's HTML results for the web and the Europe PMC REST API for papers, and `web_fetch` reads one
+public page and turns its HTML (or a Europe PMC full-text XML article) into plain text, in parts for long
+pages. Neither service needs a key. A new session records the setting in its config (`experimental`),
+keeps it when it resumes, and the server passes `CRYOPILOT_WEB_TOOLS=1` or `0` to the driver, so a value
+exported in the server's environment cannot turn it on. The harness adds the two tools only then. Every
+result is marked as untrusted web content, and `web_fetch` refuses addresses that resolve to this
+computer or a private network, also after a redirect, so a page cannot steer the agent to CryoSPARC or
+other lab services. The run report lists the feature under Software.
+
 ## Maps from CryoSPARC
 
 The **Maps** tab lists the jobs of a reconstruction session's CryoSPARC workspace with their maps and
@@ -118,7 +167,7 @@ the agent's request.
 
 | What | Path |
 | --- | --- |
-| App state (projects, sessions, modeling events, logs, settings) | `~/.cryopilot/app/app.sqlite3` |
+| App state (projects, sessions, modeling events, logs, usage, settings) | `~/.cryopilot/app/app.sqlite3` |
 | Remembered passwords (only when turned on) | `~/.cryopilot/app/credentials.json` |
 | Uploads and reconstruction run folders | `~/.cryopilot/app/projects/<slug>/` |
 | Map previews, downloaded maps, CryoSPARC images | `~/.cryopilot/app/cache/` |
@@ -179,7 +228,9 @@ session's **Agent output** log.
   Anthropic Messages API.
 
 Stopping a turn sends `SIGINT` to the driver, which the harness already handles as a checkpointed
-interruption. A stopped session resumes when you send it a message.
+interruption. A stopped session resumes when you send it a message. A driver that exits on its own
+(killed, out of memory) puts its session in the error state, and a server start settles sessions
+that the last server left working or paused.
 
 ## Compiled executable
 

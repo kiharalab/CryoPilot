@@ -57,6 +57,11 @@ class AgentProcess:
         self.detail = ""
         self.started_at = time.time()
         self.returncode: int | None = None
+        # A message sent but not yet taken up: the driver reporting "idle" while
+        # it starts or ends a turn does not mean it is waiting for the user.
+        self.message_waiting = False
+        # Set when the app itself stops the process, so its exit is not a failure.
+        self.stop_requested = False
         self._on_event = on_event
         self._on_log = on_log
         self._stdin_lock = threading.Lock()
@@ -92,7 +97,11 @@ class AgentProcess:
                 continue
             if not isinstance(event, dict):
                 continue
+            if event.get("event") == "user_turn_accepted":
+                self.message_waiting = False
             if event.get("event") == "status":
+                if event.get("state") == "idle" and self.message_waiting:
+                    continue
                 self.state = str(event.get("state") or "")
                 self.detail = str(event.get("detail") or "")
             self._on_event(self.session_id, event)
@@ -105,11 +114,17 @@ class AgentProcess:
                 except OSError:
                     pass
         if self.state not in {"stopped", "error"}:
-            self.state = "stopped"
-            self.detail = f"Driver exited with code {self.returncode}"
+            # The process went away by itself (out of memory, killed, a crash).
+            failed = self.returncode != 0 and not self.stop_requested
+            self.state = "error" if failed else "stopped"
+            self.detail = (
+                f"The agent process stopped unexpectedly (exit code {self.returncode})."
+                if failed
+                else f"Driver exited with code {self.returncode}"
+            )
             self._on_event(
                 self.session_id,
-                {"event": "status", "state": "stopped", "detail": self.detail, "returncode": self.returncode},
+                {"event": "status", "state": self.state, "detail": self.detail, "returncode": self.returncode},
             )
 
     def _pump_stderr(self) -> None:
@@ -136,6 +151,7 @@ class AgentProcess:
             self.process.send_signal(signal.SIGINT)
 
     def shutdown(self, timeout: float = 10.0) -> None:
+        self.stop_requested = True
         if self.process.poll() is not None:
             return
         try:
@@ -276,7 +292,25 @@ class ProcessManager:
         process = self.get(session_id)
         if process is None or not process.alive:
             raise RuntimeError("The agent is not running for this session")
+        process.message_waiting = True
         process.send({"op": "message", "content": content})
+
+    def pause(self, session_id: str, detail: str = "") -> None:
+        """Hold the agent's next model request. Does nothing without a running agent."""
+
+        self._send_control(session_id, {"op": "pause", "detail": detail})
+
+    def resume(self, session_id: str) -> None:
+        self._send_control(session_id, {"op": "resume"})
+
+    def _send_control(self, session_id: str, command: dict[str, Any]) -> None:
+        process = self.get(session_id)
+        if process is None or not process.alive:
+            return
+        try:
+            process.send(command)
+        except (OSError, RuntimeError, ValueError):
+            pass  # it has just exited; its next start checks the limit again
 
     def interrupt(self, session_id: str) -> None:
         process = self.get(session_id)

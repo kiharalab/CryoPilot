@@ -95,6 +95,18 @@ class AppStore:
                     created_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS console_lines_session ON console_lines(session_id, id);
+                CREATE TABLE IF NOT EXISTS session_usage (
+                    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                    model TEXT NOT NULL,
+                    requests INTEGER NOT NULL DEFAULT 0,
+                    input_tokens INTEGER NOT NULL DEFAULT 0,
+                    cached_tokens INTEGER NOT NULL DEFAULT 0,
+                    cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+                    output_tokens INTEGER NOT NULL DEFAULT 0,
+                    cost_usd REAL NOT NULL DEFAULT 0,
+                    unpriced_requests INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (session_id, model)
+                );
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
                     value_json TEXT NOT NULL
@@ -318,6 +330,55 @@ class AppStore:
     def delete_session(self, session_id: str) -> None:
         with self._lock:
             self._connection.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+    def settle_unfinished_sessions(self, states: tuple[str, ...]) -> int:
+        """Sessions left in these states when the server last stopped have no agent now."""
+
+        marks = ", ".join("?" for _ in states)
+        with self._lock:
+            cursor = self._connection.execute(
+                f"UPDATE sessions SET status = 'stopped' WHERE status IN ({marks})", states
+            )
+            return cursor.rowcount
+
+    # ------------------------------------------------------------------ usage
+    def add_usage(self, session_id: str, model: str, record: dict[str, Any], cost_usd: float | None) -> None:
+        """Add one model response's tokens. A response with no known price counts as unpriced."""
+
+        written = int(record.get("cache_write_tokens") or 0) + int(record.get("cache_write_long_tokens") or 0)
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO session_usage (session_id, model, requests, input_tokens, cached_tokens, cache_write_tokens,
+                                           output_tokens, cost_usd, unpriced_requests)
+                VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(session_id, model) DO UPDATE SET
+                    requests = requests + 1,
+                    input_tokens = input_tokens + excluded.input_tokens,
+                    cached_tokens = cached_tokens + excluded.cached_tokens,
+                    cache_write_tokens = cache_write_tokens + excluded.cache_write_tokens,
+                    output_tokens = output_tokens + excluded.output_tokens,
+                    cost_usd = cost_usd + excluded.cost_usd,
+                    unpriced_requests = unpriced_requests + excluded.unpriced_requests
+                """,
+                (
+                    session_id,
+                    model,
+                    int(record.get("input_tokens") or 0),
+                    int(record.get("cached_tokens") or 0),
+                    written,
+                    int(record.get("output_tokens") or 0),
+                    cost_usd or 0.0,
+                    1 if cost_usd is None else 0,
+                ),
+            )
+
+    def session_usage(self, session_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM session_usage WHERE session_id = ? ORDER BY cost_usd DESC, model", (session_id,)
+            ).fetchall()
+        return [{key: row[key] for key in row.keys() if key != "session_id"} for row in rows]
 
     # --------------------------------------------------------- modeling events
     def append_modeling_event(self, session_id: str, kind: str, payload: Any) -> dict[str, Any]:

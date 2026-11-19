@@ -17,22 +17,26 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 from . import attachments, auth, files as file_roots, guides, modeling_toolchain
-from . import routes_cryosparc, routes_daq, routes_files, routes_setup, routes_terminal
+from . import routes_cryosparc, routes_daq, routes_files, routes_report, routes_setup, routes_terminal
 from .config import FRONTEND_DIST
 from .manifests import ManifestError, build_agent_config, build_manifest, compose_modeling_request, provider_for_model
 from .state import (
     RECONSTRUCTION_SUPPORTED,
     REASONING_EFFORTS,
     api_error,
+    apply_spending_limit,
     bus,
     cryosparc_settings,
     defaults,
     driver_env,
+    experimental_settings,
+    parse_spending_limit,
     processes,
     processing_guide,
     require_model_key,
     require_project,
     require_session,
+    require_within_limit,
     session_runtime_view,
     shutting_down,
     store,
@@ -49,6 +53,7 @@ app.include_router(routes_cryosparc.router)
 app.include_router(routes_files.router)
 app.include_router(routes_daq.router)
 app.include_router(routes_terminal.router)
+app.include_router(routes_report.router)
 
 modeling_toolchain.status()  # start the first check in the background
 
@@ -150,6 +155,7 @@ async def create_reconstruction_session(project_id: str, request: Request) -> di
     agent_config["cryosparc_email"] = settings["email"]
     guide = guides.normalize(body.get("processing_guide") or processing_guide())
     title = str(body.get("title") or "").strip() or manifest["user_goal"][:60]
+    experimental = experimental_settings()["enabled"]
 
     def start() -> dict[str, Any]:
         # File writes and the process start stay off the event loop.
@@ -157,7 +163,14 @@ async def create_reconstruction_session(project_id: str, request: Request) -> di
             project_id=project["id"],
             kind="reconstruction",
             title=title,
-            config={"manifest": manifest, "agent": agent_config, "processing_guide": guide},
+            config={
+                "manifest": manifest,
+                "agent": agent_config,
+                "processing_guide": guide,
+                "spending_limit_usd": defaults()["spending_limit_usd"],
+                # A session keeps the experimental features it started with, so a resumed run behaves the same.
+                "experimental": experimental,
+            },
             status="starting",
         )
         dirs = file_roots.ensure_project_dirs(project["slug"])
@@ -173,7 +186,7 @@ async def create_reconstruction_session(project_id: str, request: Request) -> di
                 cwd=session_dir,
                 manifest_path=manifest_path,
                 config_path=config_path,
-                env=driver_env("reconstruction", guide=guide),
+                env=driver_env("reconstruction", guide=guide, web_tools=experimental),
             )
         except Exception as exc:
             _start_failed(session["id"], exc)
@@ -205,6 +218,7 @@ async def import_reconstruction_session(project_id: str, request: Request) -> di
         "imported": True,
         "project_uid": harness.get("project_uid"),
         "workspace_uid": harness.get("workspace_uid"),
+        "experimental": experimental_settings()["enabled"],
     }
     # The harness does not record its guide; the caller may say which one the run used.
     guide = str(body.get("processing_guide") or "").strip().lower()
@@ -279,6 +293,7 @@ async def create_modeling_session(project_id: str, request: Request) -> dict[str
                 "max_turns": max_turns,
                 "workspace": workspace_relative,
                 "attachments": body.get("attachments") or [],
+                "spending_limit_usd": defaults()["spending_limit_usd"],
             },
             status="starting",
         )
@@ -314,7 +329,16 @@ async def update_session(session_id: str, request: Request) -> dict[str, Any]:
     updates = {}
     if "title" in body:
         updates["title"] = str(body["title"]).strip() or session["title"]
-    return session_runtime_view(store.update_session(session_id, **updates))
+    if "spending_limit_usd" in body:
+        try:
+            limit = parse_spending_limit(body["spending_limit_usd"])
+        except ValueError as exc:
+            raise api_error(422, str(exc))
+        updates["config"] = {**(session.get("config") or {}), "spending_limit_usd": limit}
+    updated = store.update_session(session_id, **updates)
+    if "spending_limit_usd" in body:
+        apply_spending_limit(updated)
+    return session_runtime_view(updated)
 
 
 @app.delete("/api/sessions/{session_id}")
@@ -369,7 +393,7 @@ def _ensure_reconstruction_process(session: dict[str, Any]) -> None:
             session["id"],
             cwd=session_dir,
             resume_harness_id=harness_id,
-            env=driver_env("reconstruction", guide=guide),
+            env=driver_env("reconstruction", guide=guide, web_tools=bool(config.get("experimental"))),
         )
     except Exception as exc:
         _start_failed(session["id"], exc)
@@ -402,6 +426,7 @@ def _ensure_modeling_process(session: dict[str, Any]) -> None:
 @app.post("/api/sessions/{session_id}/start")
 def start_session(session_id: str) -> dict[str, Any]:
     session = require_session(session_id)
+    require_within_limit(session)
     try:
         if session["kind"] == "reconstruction":
             _ensure_reconstruction_process(session)
@@ -418,8 +443,9 @@ def start_session(session_id: str) -> dict[str, Any]:
 async def post_message(session_id: str, request: Request) -> dict[str, Any]:
     session = require_session(session_id)
     body = await request.json()
+    require_within_limit(session)
     runtime = processes.status(session_id)
-    if runtime["running"] and runtime["state"] in {"running", "connecting", "initializing", "starting"}:
+    if runtime["running"] and runtime["state"] in {"running", "connecting", "initializing", "starting", "paused"}:
         raise api_error(409, "The agent is still working. Wait for it to finish or stop it first.")
     try:
         if session["kind"] == "modeling":

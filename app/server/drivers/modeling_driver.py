@@ -32,20 +32,22 @@ if "__compiled__" not in globals():
     sys.path.insert(0, str(REPO_ROOT / "reconstruction_agent"))
     sys.path.insert(0, str(MODELING_ROOT))
 
-from protocol import CommandReader, Emitter, redirect_stdout_to_stderr  # noqa: E402
+from protocol import CommandReader, Emitter, RunGate, redirect_stdout_to_stderr  # noqa: E402
 
 emitter = Emitter()
 redirect_stdout_to_stderr()
 
-from agents import Agent, ModelSettings, Runner, SQLiteSession  # noqa: E402
+from agents import Agent, ModelSettings, RunHooks, Runner, SQLiteSession  # noqa: E402
 from agents.items import ToolCallItem, ToolCallOutputItem  # noqa: E402
 from openai.types.responses import (  # noqa: E402
+    ResponseCompletedEvent,
     ResponseReasoningSummaryTextDeltaEvent,
     ResponseReasoningSummaryTextDoneEvent,
     ResponseTextDeltaEvent,
 )
 
 from claude_model import agent_model, api_key_name  # noqa: E402
+from llm_client import usage_record  # noqa: E402
 from prompts import SYSTEM_PROMPT  # noqa: E402
 from tools import ALL_TOOLS, ROOT  # noqa: E402
 
@@ -56,6 +58,22 @@ TRACE_LIMIT = 12_000
 
 def status(state: str, detail: str = "") -> None:
     emitter.emit("status", state=state, detail=detail)
+
+
+gate = RunGate(status)
+
+
+class GateHooks(RunHooks):
+    """Holds each model request while the app has paused the run."""
+
+    async def on_llm_start(self, context: Any, agent: Any, system_prompt: Any, input_items: Any) -> None:
+        await gate.hold_async()
+
+
+def report_usage(response: Any) -> None:
+    record = usage_record(getattr(response, "usage", None), getattr(response, "model", None))
+    if record is not None:
+        emitter.emit("usage", **record)
 
 
 def log(text: str) -> None:
@@ -179,7 +197,7 @@ async def run_turn(agent: Agent, session: SQLiteSession, request: str, max_turns
     status("running", "Agent is working")
     trace = EventTrace()
     try:
-        stream = Runner.run_streamed(agent, request, session=session, max_turns=max_turns)
+        stream = Runner.run_streamed(agent, request, session=session, max_turns=max_turns, hooks=GateHooks())
         async for event in stream.stream_events():
             if event.type == "raw_response_event":
                 data = event.data
@@ -189,6 +207,8 @@ async def run_turn(agent: Agent, session: SQLiteSession, request: str, max_turns
                     trace.reasoning_done()
                 elif isinstance(data, ResponseTextDeltaEvent):
                     trace.answer_delta(data.delta)
+                elif isinstance(data, ResponseCompletedEvent):
+                    report_usage(data.response)
             elif event.type == "run_item_stream_event":
                 if event.name == "tool_called" and isinstance(event.item, ToolCallItem):
                     trace.tool_called(event.item)
@@ -221,7 +241,7 @@ async def main_async(args: argparse.Namespace) -> int:
     workspace_dir.mkdir(parents=True, exist_ok=True)
     agent = build_agent(args.model, args.effort, args.workspace)
     session = SQLiteSession(args.session_id, args.memory_db)
-    reader = CommandReader()
+    reader = CommandReader(gate)
     loop = asyncio.get_running_loop()
     # SIGINT is the server's "stop the current turn" signal; ignore it while idle.
     loop.add_signal_handler(signal.SIGINT, lambda: None)

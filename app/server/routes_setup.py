@@ -10,9 +10,11 @@ import openai
 from fastapi import APIRouter, Request
 
 from ..version import VERSION
-from . import cryosparc_bridge, cryozeta_bridge, guides, modeling_toolchain, updates
+from . import alerts, cryosparc_bridge, cryozeta_bridge, guides, modeling_toolchain, pricing, updates
 from .config import HARNESS_SESSION_DB, MODELING_PYTHON, REPO_ROOT
 from .state import (
+    alert_sender,
+    alerts_view,
     RECONSTRUCTION_EFFORTS,
     RECONSTRUCTION_SUPPORTED,
     REASONING_EFFORTS,
@@ -25,7 +27,9 @@ from .state import (
     cryozeta_credentials,
     cryozeta_settings,
     defaults,
+    experimental_settings,
     openai_key,
+    parse_spending_limit,
     processes,
     processing_guide,
     store,
@@ -71,6 +75,9 @@ def setup_view() -> dict[str, Any]:
         "remember_credentials": credentials.remember,
         "defaults": defaults(),
         "modeling_tools": modeling_toolchain.status(),
+        "alerts": alerts_view(),
+        "experimental": experimental_settings(),
+        "prices_as_of": pricing.PRICES_AS_OF,
     }
 
 
@@ -237,9 +244,32 @@ async def put_settings(request: Request) -> dict[str, Any]:
             if not 1 <= turns <= 5000:
                 raise api_error(422, "Maximum turns must be between 1 and 5000")
             saved["modeling_max_turns"] = turns
+        if "spending_limit_usd" in incoming:
+            try:
+                saved["spending_limit_usd"] = parse_spending_limit(incoming["spending_limit_usd"])
+            except ValueError as exc:
+                raise api_error(422, str(exc))
         store.set_setting("defaults", saved)
 
+    if isinstance(body.get("experimental"), dict) and "enabled" in body["experimental"]:
+        store.set_setting("experimental", {"enabled": bool(body["experimental"]["enabled"])})
+
+    if isinstance(body.get("alerts"), dict):
+        try:
+            changed = alerts.apply_changes(store.get_setting("alerts", {}) or {}, body["alerts"], credentials.set)
+        except alerts.AlertSettingsError as exc:
+            raise api_error(422, str(exc))
+        store.set_setting("alerts", changed)
+
     return setup_view()
+
+
+@router.post("/api/settings/alerts/test")
+def test_alerts() -> dict[str, Any]:
+    results = alert_sender.test()
+    if not results:
+        raise api_error(400, "Add a webhook or an email address first.")
+    return {"results": results, "alerts": alerts_view()}
 
 
 # ---------------------------------------------------------- connection tests

@@ -123,9 +123,12 @@ def response_usage(usage: Any) -> ResponseUsage:
     written = usage.cache_creation_input_tokens or 0
     # Claude counts cached input apart from input_tokens; OpenAI includes it.
     input_tokens = usage.input_tokens + cached + written
+    creation = getattr(usage, "cache_creation", None)
+    long_writes = getattr(creation, "ephemeral_1h_input_tokens", written) if creation is not None else written
     return ResponseUsage(
         input_tokens=input_tokens,
-        input_tokens_details=InputTokensDetails(cached_tokens=cached, cache_write_tokens=written),
+        # The 1 hour cache costs more to write; llm_client.usage_record reads the extra field.
+        input_tokens_details=InputTokensDetails(cached_tokens=cached, cache_write_tokens=written, cache_write_long_tokens=long_writes or 0),
         output_tokens=usage.output_tokens,
         output_tokens_details=OutputTokensDetails(reasoning_tokens=0),
         total_tokens=input_tokens + usage.output_tokens,
