@@ -3,9 +3,12 @@
 For each scored candidate, ``modeling_agent/daq/daq_compute.py`` writes
 ``candidate_NNN/daq_scores.csv`` (raw per-residue AA, CA, SS and total
 scores), a ``daq_scores.metadata.json`` sidecar (model, map, contour), and
-``aa.pdb``/``ca.pdb``/... with the raw score in the B-factor column. The app
+``aa.pdb``/``aa.cif``/... with the raw score in the B-factor column. The app
 reads these files to plot per-residue profiles and to colour the model by
-score in Mol*.
+score in Mol*. The model goes to Mol* as mmCIF when there is one, because PDB
+format has room for one-character chain names only: a two-character name such
+as ``A0`` runs into the residue-name columns, and Mol* then reads every
+residue as a ligand.
 
 The headline number is the centered 19-residue mean of AA DAQ along each
 chain, computed like ``modeling_agent/refinement.py::_running_mean``: the
@@ -29,7 +32,9 @@ from .files import SKIP_DIRS, confine
 
 SCORE_TABLE_NAME = "daq_scores.csv"
 METADATA_NAME = "daq_scores.metadata.json"
-SCORED_MODEL_NAME = "aa.pdb"
+SCORED_MODEL_NAMES = ("aa.cif", "aa.pdb")
+MMCIF_SUFFIXES = (".cif", ".mmcif")
+MODEL_SUFFIXES = (*MMCIF_SUFFIXES, ".pdb", ".ent")
 METRICS = ("aa", "ca", "ss", "total")
 STRUCTURE_METRICS = ("aa_mean", *METRICS)
 DEFAULT_WINDOW = 19
@@ -336,21 +341,22 @@ def scored_model_path(
     *,
     required: bool = True,
 ) -> Path | None:
-    """The model the table scored: ``aa.pdb`` next to it, else the metadata's PDB model.
+    """The model the table scored: ``aa.cif`` or ``aa.pdb`` next to it, else the metadata's model.
 
     The metadata path is absolute (the agent resolves it); it is accepted only
     inside the project's modeling workspace, like every other DAQ path.
     """
 
     workspace = workspace.resolve()
-    try:
-        candidate = confine(workspace, table.with_name(SCORED_MODEL_NAME).relative_to(workspace).as_posix())
+    for name in SCORED_MODEL_NAMES:
+        try:
+            candidate = confine(workspace, table.with_name(name).relative_to(workspace).as_posix())
+        except ValueError:
+            continue
         if candidate.is_file():
             return candidate
-    except ValueError:
-        pass
     recorded = metadata.get("model_path")
-    if recorded and str(recorded).lower().endswith((".pdb", ".ent")):
+    if recorded and str(recorded).lower().endswith(MODEL_SUFFIXES):
         path = Path(str(recorded)).resolve()
         try:
             path.relative_to(workspace)
@@ -361,7 +367,7 @@ def scored_model_path(
         if path.is_file():
             return path
     if required:
-        raise FileNotFoundError("No PDB model was found next to this DAQ table")
+        raise FileNotFoundError("No model was found next to this DAQ table")
     return None
 
 
@@ -392,13 +398,68 @@ def rewrite_b_factors(pdb_text: str, values: dict[tuple[str, int, str], float | 
     return "\n".join(lines) + "\n"
 
 
+# One mmCIF value: a quoted string (a quote inside it is followed by a non-space) or a bare word.
+_CIF_TOKEN = re.compile(r"""'(?:[^']|'(?=\S))*'(?=\s|$)|"(?:[^"]|"(?=\S))*"(?=\s|$)|\S+""")
+
+
+def _cif_b_factor(value: float | None) -> str:
+    return "0.00" if value is None else f"{value:.2f}"
+
+
+def rewrite_cif_b_factors(cif_text: str, values: dict[tuple[str, int, str], float | None]) -> str:
+    """mmCIF text with each atom_site B_iso_or_equiv set from ``values``.
+
+    Atoms are matched by author chain, author residue number, and insertion
+    code, like the PDB rewrite. Rows of the atom_site loop are written again
+    with single spaces between values; every other line stays as it is.
+    """
+
+    lines = cif_text.splitlines()
+    out: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        out.append(line)
+        index += 1
+        if line.strip() != "loop_" or index >= len(lines) or not lines[index].startswith("_atom_site."):
+            continue
+        fields: list[str] = []
+        while index < len(lines) and lines[index].startswith("_atom_site."):
+            fields.append(lines[index].split()[0][len("_atom_site."):])
+            out.append(lines[index])
+            index += 1
+        column = {name: position for position, name in enumerate(fields)}
+        chain = column.get("auth_asym_id", column.get("label_asym_id"))
+        number = column.get("auth_seq_id", column.get("label_seq_id"))
+        insertion = column.get("pdbx_PDB_ins_code")
+        b_factor = column.get("B_iso_or_equiv")
+        while index < len(lines):
+            row = lines[index]
+            stripped = row.strip()
+            if not stripped or stripped.startswith(("#", "_", "loop_", "data_")):
+                break
+            index += 1
+            tokens = _CIF_TOKEN.findall(row)
+            if b_factor is None or chain is None or number is None or len(tokens) != len(fields):
+                out.append(row)
+                continue
+            code = tokens[insertion] if insertion is not None else "?"
+            try:
+                key = (tokens[chain].strip("'\""), int(tokens[number]), "" if code in ("?", ".") else code)
+            except ValueError:
+                key = None
+            tokens[b_factor] = _cif_b_factor(values.get(key) if key else None)
+            out.append(" ".join(tokens))
+    return "\n".join(out) + "\n"
+
+
 def scored_structure(
     workspace: Path,
     relative: str,
     metric: str = "aa_mean",
     window: int = DEFAULT_WINDOW,
 ) -> tuple[str, str]:
-    """The scored model as PDB text with ``metric`` in the B-factor column, and a file name."""
+    """The scored model as mmCIF or PDB text with ``metric`` in the B-factor column, and a file name."""
 
     if metric not in STRUCTURE_METRICS:
         raise DaqError(f"Unknown DAQ metric: {metric}")
@@ -409,4 +470,6 @@ def scored_structure(
     values = {(residue["chain"], residue["resnum"], residue["icode"]): residue[metric] for residue in residues}
     text = model.read_text(encoding="utf-8", errors="replace")
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(str(metadata.get("model_path") or model)).stem) or "model"
+    if model.suffix.lower() in MMCIF_SUFFIXES:
+        return rewrite_cif_b_factors(text, values), f"{stem}_daq_{metric}.cif"
     return rewrite_b_factors(text, values), f"{stem}_daq_{metric}.pdb"

@@ -3,6 +3,12 @@
 What changed in each CryoPilot release. The website and the app show these notes
 as plain text, so write them for the people who use CryoPilot, without Markdown.
 
+## 0.3.8 - 2026-11-19
+
+- The viewer has a style control for each model: cartoon, sticks, or both.
+- A model with two-character chain names, such as A0, now shows as a clean cartoon when you colour it by DAQ score. Before, it was covered in sticks, and its chain colours and residue focus did not work.
+- CryoPilot checks for a newer version each time it starts, and Settings > About has a Check for updates button.
+
 ## 0.3.7 - 2026-11-10
 
 - New: Settings has an Experimental section. Turn on experimental features to let new reconstruction sessions search the web, search papers in Europe PMC, and read public web pages, for example the CryoSPARC guide or a methods section. Neither service needs an account, and the run report notes when a session used them.

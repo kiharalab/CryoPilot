@@ -73,8 +73,10 @@ export const api = {
   //   modeling_model, modeling_effort, modeling_max_turns}, modeling_tools}
   setup: () => request('/api/setup'),
   // Update payload: {current, latest, size, releases:[{version, date, notes}], new_releases, blocker,
-  //   agents_running, install:{state:'idle'|'downloading'|'checking'|'ready'|'failed', version, done, total, error}}
+  //   agents_running, install:{state:'idle'|'downloading'|'checking'|'ready'|'failed', version, done, total, error},
+  //   checks_off, checked_at (Unix seconds of the last answer from the website, or null)}
   update: () => request('/api/update'),
+  checkUpdate: () => request('/api/update/check', { method: 'POST' }),
   installUpdate: () => request('/api/update/install', { method: 'POST' }),
   restartForUpdate: () => request('/api/update/restart', { method: 'POST' }),
   license: () => request('/api/license'), // {id, name, accepted, accepted_at, text}

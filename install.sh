@@ -31,7 +31,7 @@
 
 set -eu
 
-LATEST=0.3.7
+LATEST=0.3.8
 DOWNLOADS=https://kiharalab.org/CryoPilot/app
 INSTALL_COUNT=https://cryopilot.vercel.app/api/installs
 

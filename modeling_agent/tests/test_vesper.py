@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import asyncio
 import os
 import tempfile
 import unittest
@@ -15,8 +13,6 @@ import numpy as np
 import tools
 import vesper_align
 from map_utils import read_mrc, write_mrc, flip_map_copy
-from handedness import compare_scores
-from agents.tool_context import ToolContext
 from test_daq import make_structure
 
 
@@ -127,24 +123,13 @@ class VesperTests(unittest.TestCase):
         actual = np.array([[a.pos.x, a.pos.y, a.pos.z] for c in fitted[0] for r in c for a in r])
         target_xyz = np.array([[a.pos.x, a.pos.y, a.pos.z] for c in target[0] for r in c for a in r])
         self.assertLess(np.sqrt(np.mean(np.sum((actual - target_xyz) ** 2, axis=1))), 1.5)
-        if os.environ.get("CRYOPILOT_TEST_QSCORE") == "1":
-            flip_map_copy(self.root / "map.mrc", self.root / "flipped.mrc")
-            other = vesper_align.align(self.model, self.root / "flipped.mrc", self.root / "fit_flipped",
-                                      resolution=3, contour=.01, candidate_index=1, grid_spacing=1,
-                                      angular_step=90, top_n=3, bandwidth=2, cores=2,
-                                      simulate=tools._simulate_model_map, environment=tools._shell_environment())
-            tables = []
-            for hand, fit in (("original", result), ("flipped", other)):
-                arguments = json.dumps({"model_path": fit["aligned_model"], "map_path": fit["map_path"],
-                                        "output_dir": f"q_{hand}"})
-                context = ToolContext(context=None, tool_name="run_qscore", tool_call_id="test", tool_arguments=arguments)
-                with patch.object(tools, "ROOT", self.root):
-                    scored = json.loads(asyncio.run(tools.run_qscore.on_invoke_tool(context, arguments)))
-                tables.append(Path(scored["score_table"]))
-            comparison = compare_scores(*tables, self.root / "comparison.json", "qscore")
-            self.assertEqual(comparison["coverage"]["matched"], 4)
-            self.assertGreater(comparison["original_mean"], comparison["flipped_mean"])
-
+        # The model is chiral, so the mirrored map must give a worse best placement.
+        flip_map_copy(self.root / "map.mrc", self.root / "flipped.mrc")
+        other = vesper_align.align(self.model, self.root / "flipped.mrc", self.root / "fit_flipped",
+                                   resolution=3, contour=.01, candidate_index=1, grid_spacing=1,
+                                   angular_step=90, top_n=3, bandwidth=2, cores=2,
+                                   simulate=tools._simulate_model_map, environment=tools._shell_environment())
+        self.assertGreater(result["dot_score"], other["dot_score"])
 
 if __name__ == "__main__":
     unittest.main()

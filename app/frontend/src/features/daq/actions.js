@@ -77,7 +77,6 @@ export function showOnModel(projectId, result, metric) {
     key: DAQ_MODEL_KEY,
     url: api.daqStructureUrl(projectId, result.path, { metric, window: DAQ_WINDOW }),
     label: `${modelName(result)} DAQ`,
-    format: 'pdb',
     color: 'daq',
     daqDomain: DAQ_DOMAIN,
   })

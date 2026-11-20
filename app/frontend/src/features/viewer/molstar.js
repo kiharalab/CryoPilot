@@ -28,6 +28,13 @@ const DAQ_FALLBACK = { low: 0xe34948, mid: 0xf0efec, high: 0x2a78d6 }
 /** Mol* viewport buttons that appear with the full Mol* controls only. */
 const VIEWPORT_FLAGS = ['ShowReset', 'ShowScreenshotControls', 'ShowControls', 'ShowSettings', 'ShowSelectionMode']
 
+/** How a model's polymer is drawn: the Mol* representations for each style. */
+export const MODEL_STYLES = {
+  cartoon: ['cartoon'],
+  sticks: ['ball-and-stick'],
+  both: ['cartoon', 'ball-and-stick'],
+}
+
 const STRUCTURE_PARTS = [
   { component: 'polymer', type: 'cartoon', polymer: true },
   { component: 'ligand', type: 'ball-and-stick' },
@@ -145,9 +152,12 @@ function nameHints(request) {
   return `${request.label || ''} ${path}`.toLowerCase()
 }
 
-function structureFormat(request) {
+/** The format named by the request, else read from the name, else from the text: mmCIF starts with data_. */
+function structureFormat(request, payload) {
   if (request.format) return request.format
-  return /\.(bcif|cif|mmcif)(\.gz)?\b/.test(nameHints(request)) ? 'mmcif' : 'pdb'
+  if (/\.(bcif|cif|mmcif)(\.gz)?\b/.test(nameHints(request))) return 'mmcif'
+  if (typeof payload !== 'string') return 'mmcif'
+  return /^\s*(#[^\n]*\n\s*)*data_/.test(payload.slice(0, 4096)) ? 'mmcif' : 'pdb'
 }
 
 /** An error the panel shows as a toast: `title` plus the reason as `detail`. */
@@ -209,7 +219,7 @@ async function readBytes(url) {
  *
  * Layers are snapshots: {key, kind:'volume'|'structure', label, status, visible,
  *   volume:  color, sigma, opacity, stats:{min,max,mean,sigma}, range:[lo,hi]
- *   structure: colorMode:'chain'|'daq', daq (DAQ colouring available), daqDomain}
+ *   structure: colorMode:'chain'|'daq', style:'cartoon'|'sticks'|'both', daq (DAQ colouring available), daqDomain}
  */
 export function createController(plugin, lib) {
   const { StateTransforms, PluginConfig } = lib.plugin
@@ -491,6 +501,7 @@ export function createController(plugin, lib) {
       visible: true,
       daq,
       colorMode: daq ? 'daq' : 'chain',
+      style: MODEL_STYLES[request.style] ? request.style : MODEL_STYLES[previous?.style] ? previous.style : 'cartoon',
       daqDomain: Array.isArray(request.daqDomain) && request.daqDomain.length === 2 ? [...request.daqDomain] : [...DAQ_DOMAIN],
       daqColors: daqColors(request),
       refs: {},
@@ -498,10 +509,10 @@ export function createController(plugin, lib) {
     layers.set(key, layer)
     setActivity(`Opening ${label}`)
     try {
-      const format = structureFormat(request)
       const bytes = await readBytes(request.url)
       const binary = /\.bcif\b/.test(nameHints(request)) || (bytes.length > 0 && bytes[0] >= 0x80)
       const payload = binary ? bytes : new TextDecoder().decode(bytes)
+      const format = structureFormat(request, payload)
       const raw = await plugin.builders.data.rawData({ data: payload, label }, { state: { isGhost: true } })
       layer.refs.root = raw.ref
       const builder = plugin.builders.structure
@@ -521,23 +532,22 @@ export function createController(plugin, lib) {
       if (!components.length) throw new Error('the file holds no atoms Mol* can draw')
       const update = plugin.build()
       const reprs = []
-      const polymers = []
       for (const { part, component } of components) {
-        const props = { type: part.type }
         if (part.polymer) {
-          const theme = polymerColorTheme(layer)
-          props.color = theme.name
-          props.colorParams = theme.params
-        } else if (part.type === 'ball-and-stick') {
-          props.color = 'element-symbol'
+          layer.refs.polymerComponent = component.ref
+          layer.refs.polymerByType = {}
+          for (const type of MODEL_STYLES[layer.style]) layer.refs.polymerByType[type] = buildPolymer(update, layer, type)
+          reprs.push(...Object.values(layer.refs.polymerByType))
+          continue
         }
+        const props = { type: part.type }
+        if (part.type === 'ball-and-stick') props.color = 'element-symbol'
         const repr = builder.representation.buildRepresentation(update, component, props, { tag: `cryopilot-${part.component}` })
         reprs.push(repr.ref)
-        if (part.polymer) polymers.push(repr.ref)
       }
       await update.commit()
       layer.refs.reprs = reprs
-      layer.refs.polymers = polymers
+      layer.refs.polymers = Object.values(layer.refs.polymerByType || {})
       layer.status = 'ready'
     } catch (err) {
       await abandonLoad(key, layer, previous)
@@ -556,6 +566,48 @@ export function createController(plugin, lib) {
     }
     emit()
     return publicView(layer)
+  }
+
+  /** Adds one polymer representation (a Mol* type such as 'cartoon') to `update` and returns its ref. */
+  function buildPolymer(update, layer, type) {
+    const theme = polymerColorTheme(layer)
+    const props = { type, color: theme.name, colorParams: theme.params }
+    return plugin.builders.structure.representation.buildRepresentation(update, layer.refs.polymerComponent, props, {
+      tag: `cryopilot-polymer-${type}`,
+    }).ref
+  }
+
+  /**
+   * Draws the polymer as cartoon, sticks, or both; ligands keep their sticks. A hidden model
+   * takes the new style when it is shown again: Mol* moves the camera when representations
+   * change in a scene with nothing visible.
+   */
+  async function setStructureStyle(key, style) {
+    const layer = layers.get(key)
+    if (!layer || layer.kind !== 'structure' || layer.style === style || !MODEL_STYLES[style]) return
+    layer.style = style
+    emit()
+    if (layer.visible) await applyStyle(layer)
+  }
+
+  /** Brings the layer's polymer representations in line with its style, keeping those that stay. */
+  async function applyStyle(layer) {
+    if (layer.status !== 'ready' || !cell(layer.refs.polymerComponent)) return
+    const wanted = MODEL_STYLES[layer.style]
+    if (Object.keys(layer.refs.polymerByType || {}).sort().join() === [...wanted].sort().join()) return
+    const byType = { ...(layer.refs.polymerByType || {}) }
+    const update = plugin.build()
+    for (const [type, ref] of Object.entries(byType)) {
+      if (wanted.includes(type)) continue
+      if (cell(ref)) update.delete(ref)
+      delete byType[type]
+    }
+    for (const type of wanted) if (!byType[type]) byType[type] = buildPolymer(update, layer, type)
+    await update.commit()
+    const old = layer.refs.polymers || []
+    layer.refs.polymerByType = byType
+    layer.refs.polymers = Object.values(byType)
+    layer.refs.reprs = [...(layer.refs.reprs || []).filter((ref) => !old.includes(ref)), ...layer.refs.polymers]
   }
 
   async function setStructureColor(key, mode) {
@@ -614,6 +666,7 @@ export function createController(plugin, lib) {
     } finally {
       muted -= 1
     }
+    if (visible && layer.kind === 'structure') await applyStyle(layer)
   }
 
   // --------------------------------------------------------------- remove
@@ -640,8 +693,10 @@ export function createController(plugin, lib) {
    * Runs a viewer request after the ones before it. Requests (store.showInViewer):
    *   {kind:'volume', url, label, key?, sigma?, level?, color?, opacity?, format?:'ccp4'|'dscif', entryId?}
    *     sigma is the level in σ above the mean; level is an absolute level used when sigma is absent.
-   *   {kind:'structure', url, label, key?, format?:'pdb'|'mmcif', color?:'chain'|'daq', daqDomain?, daqColors?}
+   *   {kind:'structure', url, label, key?, format?:'pdb'|'mmcif', color?:'chain'|'daq', style?:'cartoon'|'sticks'|'both', daqDomain?, daqColors?}
+   *     format defaults to the file name, then the text (mmCIF starts with data_); style defaults to the replaced layer's.
    *   {kind:'focus', key?, chain, resnum, icode?}   key defaults to the newest model
+   *   {kind:'style', key, style:'cartoon'|'sticks'|'both'}
    *   {kind:'remove', key} | {kind:'clear'}
    * A request whose key is already shown replaces that layer once the new one loads; a replaced map
    * keeps its colour and its absolute level.
@@ -656,6 +711,8 @@ export function createController(plugin, lib) {
           return addStructure(request)
         case 'focus':
           return focus(request)
+        case 'style':
+          return setStructureStyle(request.key, request.style)
         case 'remove':
           return remove(request.key)
         case 'clear':
@@ -759,6 +816,7 @@ export function createController(plugin, lib) {
     setVolume,
     setVisible,
     setStructureColor,
+    setStructureStyle: (key, style) => run({ kind: 'style', key, style }),
     remove: (key) => run({ kind: 'remove', key }),
     clear: () => run({ kind: 'clear' }),
     resetCamera,

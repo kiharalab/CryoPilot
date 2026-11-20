@@ -52,14 +52,14 @@ fitted mmCIFs, the command, settings, and VESPER logs. Reflections and nonrigid
 atomic transforms are rejected. ChimeraX does not perform alignment.
 
 The PDB reference is fitted independently to both hands with equivalent VESPER
-settings. `run_qscore` uses the ChimeraX QScore bundle with fixed sampling settings
-and saves raw per-atom scores, including missing coverage. `compare_map_hands`
-compares the same atoms; the agent checks the overlays before choosing a hand.
-VESPER DOT scores are not Q-scores. Small or inconsistent Q-score differences
-remain unresolved. QScore uses the ChimeraX implementation, which differs slightly
-from the original MapQ sampling algorithm. Fitting defaults are a 2 Å translation
-grid, 30° initial angular sampling, bandwidth 4, and ten retained placements;
-the agent can repeat both fits at a finer grid when needed.
+settings, and the agent compares the DOT score and Z-score of the best placement
+in each hand. It checks the overlays before choosing a hand. Fitting defaults are
+a 2 Å translation grid, 30° initial angular sampling, bandwidth 4, and ten
+retained placements; the agent can repeat both fits at a finer grid when needed.
+`run_qscore` uses the ChimeraX QScore bundle with fixed sampling settings and
+saves raw per-atom scores, including missing coverage, for judging local fit.
+QScore uses the ChimeraX implementation, which differs slightly from the original
+MapQ sampling algorithm.
 
 `render_map_model` uses headless PyMOL to return three density-overlay views,
 with optional residue selections for local inspection. Whole-model views show
@@ -75,13 +75,12 @@ also specify that executable explicitly.
 After CryoZeta completes, the agent independently fits each candidate to both
 hands with VESPER and computes DAQ with equivalent settings. `compare_map_hands`
 rejects mismatched settings or residue identities and saves paired coverage and
-scores. If the selected candidate has a **strictly higher matched raw AA DAQ
-mean in the opposite hand**, the agent submits that saved map copy to CryoZeta
-again using the same complete assembly FASTA and resolution, downloads the new
-model, and validates it. A map flip or rigid fit of the old model is not the final
-result. Ties and missing common coverage do not trigger a rerun. Each hand is
-modeled at most once per request to avoid repeated flip/rerun cycles. A
-validation-only request returns a recommendation without submitting a job.
+the 19-residue mean AA DAQ in each hand. The tool reports the evidence; the agent
+weighs it with the reference fit and the overlays. If it decides the other hand
+is better, it can submit the saved map copy to CryoZeta with the same complete
+assembly FASTA and resolution. A map flip or rigid fit of the old model is not
+the final result. A validation-only request returns a recommendation without
+submitting a job.
 
 The LLM orchestrates the workflow from `prompts.py`; tools compute searches,
 transforms, scores and the comparison deterministically. Submission order,
@@ -227,7 +226,7 @@ modeling_agent/
   vesper_align.py         VESPER fitting and atomic coordinate transforms
   setup_vesper.py         pinned local VESPER build
   chimerax_support.py     density simulation and Q-score bridge
-  handedness.py          matched-coverage Q-score/DAQ comparison
+  handedness.py          matched-coverage DAQ comparison
   vendor/daqcore/         copied DAQ inference code and license
   models/                 local ONNX and MLX DAQ weights
   data/                   downloaded EMDB/PDB example pair

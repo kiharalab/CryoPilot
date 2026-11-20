@@ -105,6 +105,17 @@ def get_update() -> dict[str, Any]:
     return _update_view()
 
 
+@router.post("/api/update/check")
+def check_for_update() -> dict[str, Any]:
+    if updates.checks_off():
+        raise api_error(409, "Update checks are turned off on this server (CRYOPILOT_NO_UPDATE_CHECK=1).")
+    try:
+        updates.check_now()
+    except updates.UpdateError as exc:
+        raise api_error(502, str(exc))
+    return _update_view()
+
+
 @router.post("/api/update/install")
 def install_update() -> dict[str, Any]:
     try:

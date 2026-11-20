@@ -115,7 +115,7 @@ def align(model: Path, density: Path, destination: Path, *, resolution: float, c
                   "model_handedness_changed": False, "coordinate_frame": "input map physical coordinates",
                   "settings": {"resolution_A": resolution, "contour": contour, "grid_spacing_A": grid_spacing,
                                "angular_step_degrees": angular_step, "top_n": top_n, "bandwidth": bandwidth, "cores": cores},
-                  "command": command, "note": "DOT ranks VESPER placements; it is not a Q-score or a handedness probability."}
+                  "command": command, "note": "DOT ranks VESPER placements; compare the best DOT score between map hands only when both fits used identical settings."}
         result["result_path"] = str((destination / "fit_result.json").resolve())
         (work / "fit_result.json").write_text(json.dumps(result, indent=2, allow_nan=False))
         files = list(work.iterdir())

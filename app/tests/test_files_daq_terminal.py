@@ -499,6 +499,67 @@ def test_daq_structure_rewrites_b_factors(client, project):
     assert client.get(f"/api/projects/{project['id']}/daq/structure", params={"path": path, "metric": "bogus"}).status_code == 400
 
 
+TWO_CHARACTER_CHAINS = {"A": "A0", "B": "B1"}
+
+
+def daq_cif() -> str:
+    """An mmCIF model of RESIDUES as gemmi writes it, with two-character author chain names."""
+    lines = [
+        "data_model",
+        "#",
+        "_cell.entry_id model",
+        "_cell.length_a 100.000",
+        "#",
+        "loop_",
+        *[f"_atom_site.{name}" for name in (
+            "group_PDB", "id", "type_symbol", "label_atom_id", "label_alt_id", "label_comp_id",
+            "label_asym_id", "label_entity_id", "label_seq_id", "pdbx_PDB_ins_code", "Cartn_x",
+            "Cartn_y", "Cartn_z", "occupancy", "B_iso_or_equiv", "pdbx_formal_charge", "auth_seq_id",
+            "auth_asym_id", "pdbx_PDB_model_num")],
+    ]
+    serial = 1
+    for chain, resnum, icode, resname, _ in RESIDUES:
+        for name in ("N", "CA"):
+            lines.append(f"ATOM {serial} {name[0]} {name} . {resname} {chain} 1 {resnum} {icode or '?'} "
+                         f"1.000 2.000 3.000 1 20.00 ? {resnum} {TWO_CHARACTER_CHAINS[chain]} 1")
+            serial += 1
+    lines.append(f"HETATM {serial} O \"O5'\" . NAG C 2 . ? 1.000 2.000 3.000 1 33.00 ? 501 A0 1")
+    lines += ["#", "_struct.title 'TEST MODEL'", "#"]
+    return "\n".join(lines) + "\n"
+
+
+def test_daq_structure_sends_mmcif_with_two_character_chains(client, project):
+    workspace = workspace_of(project)
+    directory = write_daq_run(workspace, "outputs/long/daq/candidate_001")
+    rows = (CSV_HEADER + daq_csv()).splitlines()
+    for index in range(1, len(rows)):
+        parts = rows[index].split(",")
+        parts[3] = TWO_CHARACTER_CHAINS[parts[3]]
+        rows[index] = ",".join(parts)
+    (directory / "daq_scores.csv").write_text("\n".join(rows) + "\n")
+    (directory / "aa.cif").write_text(daq_cif())
+    params = {"path": "outputs/long/daq/candidate_001/daq_scores.csv", "metric": "aa_mean", "window": 3}
+    response = client.get(f"/api/projects/{project['id']}/daq/structure", params=params)
+    assert response.status_code == 200
+    assert response.headers["content-disposition"].endswith('_daq_aa_mean.cif"')
+
+    original, rewritten = daq_cif().splitlines(), response.text.splitlines()
+    assert len(rewritten) == len(original)
+    means = [mean for mean in EXPECTED_MEANS_3 for _ in ("N", "CA")]
+    atoms = 0
+    for before, after in zip(original, rewritten):
+        if before.startswith("ATOM "):
+            columns_before, columns_after = before.split(), after.split()
+            assert columns_after[14] == ("0.00" if means[atoms] is None else f"{means[atoms]:.2f}")
+            assert columns_after[:14] + columns_after[15:] == columns_before[:14] + columns_before[15:]
+            atoms += 1
+        elif before.startswith("HETATM"):
+            assert after == before.replace(" 33.00 ", " 0.00 ")  # ligands are not scored; quoted names stay
+        else:
+            assert after == before
+    assert atoms == 2 * len(RESIDUES)
+
+
 def test_daq_structure_falls_back_to_the_recorded_model(client, project, sandbox, tmp_path):
     workspace = workspace_of(project)
     write_daq_run(workspace, "outputs/nomodel", with_model=False)

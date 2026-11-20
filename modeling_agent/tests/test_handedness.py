@@ -13,16 +13,16 @@ class HandednessTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
 
-    def table(self, name, values, settings=None, metric="aa"):
+    def table(self, name, values, settings=None):
         path = self.root / f"{name}.csv"
-        fields = ["chain", "residue_number", "insertion_code", "residue_name", "candidate_index", "atom", metric]
+        fields = ["chain", "residue_number", "insertion_code", "residue_name", "candidate_index", "aa"]
         with path.open("w", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(fields)
             for i, value in enumerate(values):
-                writer.writerow(["A", 10 + i, "", "ALA", 1, "CA", value])
+                writer.writerow(["A", 10 + i, "", "ALA", 1, value])
         path.with_suffix(".metadata.json").write_text(json.dumps({
-            "metric_type": "daq" if metric == "aa" else "qscore", "map_path": f"/{name}.mrc",
+            "metric_type": "daq", "map_path": f"/{name}.mrc",
             "settings": settings or {"contour": .1, "seed": 0},
             "reference": {"source_sha256": "fixture", "candidate_index": 1}}))
         return path
@@ -43,12 +43,6 @@ class HandednessTests(unittest.TestCase):
         for values in ([1, 2], [0, 1]):
             result = compare_scores(self.table("original", [1, 2]), self.table("flipped", values), self.root / "comparison.json")
             self.assertFalse(result["flipped_higher"])
-
-    def test_qscore_comparison_is_per_atom(self):
-        result = compare_scores(self.table("original", [.1], metric="qscore"),
-                                self.table("flipped", [.2], metric="qscore"), self.root / "comparison.json", "qscore")
-        self.assertTrue(result["flipped_higher"])
-        self.assertEqual(result["metric"], "qscore")
 
     def test_mismatched_settings_identity_and_missing_coverage_are_rejected(self):
         original = self.table("original", [1, ""])

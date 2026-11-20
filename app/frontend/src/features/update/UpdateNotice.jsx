@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { useApp } from '../../store/app'
+import { formatRelative } from '../../lib/format'
 import { Button, IconButton } from '../../components/ui'
 import { SetupNotice } from '../new/SetupNotice'
 
@@ -11,8 +12,9 @@ const DISMISSED_KEY = 'cryopilot-update-dismissed'
 const POLL_INSTALLING_MS = 1000
 // The Restart button waits for running agents to finish.
 const POLL_READY_MS = 10 * 1000
-// The first check runs just after the server starts, so an early answer may not have it yet.
 const POLL_MS = 10 * 60 * 1000
+// The server asks the website just after it starts, so a page opened then asks again soon.
+const FIRST_RECHECK_MS = 15 * 1000
 
 function dismissedVersion() {
   try {
@@ -40,6 +42,10 @@ function useUpdatePolling() {
     const timer = setInterval(refresh, interval)
     return () => clearInterval(timer)
   }, [interval, refreshUpdate])
+  useEffect(() => {
+    const timer = setTimeout(() => refreshUpdate().catch(() => {}), FIRST_RECHECK_MS)
+    return () => clearTimeout(timer)
+  }, [refreshUpdate])
 }
 
 function progressText(update) {
@@ -144,11 +150,31 @@ function ReleaseNotes({ release }) {
   )
 }
 
+/** Settings > About when no newer version is known: when the website last answered, and a button to ask now. */
+function UpToDate({ update }) {
+  const checkUpdate = useApp((state) => state.checkUpdate)
+  const checking = useApp((state) => state.updateChecking)
+  if (update.checks_off) return null
+  const checked = update.checked_at ? `Checked ${formatRelative(update.checked_at)}.` : 'Not checked yet.'
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-subtle px-3.5 py-2.5">
+      <p className="min-w-[200px] flex-1 text-sm text-fg">
+        {update.checked_at ? `CryoPilot ${update.current} is the latest version. ` : ''}
+        <span className="text-muted">{checked}</span>
+      </p>
+      <Button size="sm" variant="secondary" loading={checking} onClick={checkUpdate}>
+        Check for updates
+      </Button>
+    </div>
+  )
+}
+
 /** Settings > About: the state of the update, and what changed in each release. */
 export function UpdateStatus() {
   const update = useApp((state) => state.update)
   const restarting = useApp((state) => state.updateRestarting)
-  if (!update?.latest) return null
+  if (!update) return null
+  if (!update.latest) return <UpToDate update={update} />
   return (
     <div className="mt-4 rounded-xl bg-subtle px-3.5 py-2.5">
       <div className="flex flex-wrap items-center gap-3">

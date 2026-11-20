@@ -3,7 +3,8 @@
 The website publishes releases.json (written by packaging/make_releases_json.py):
 the newest release with its download address, checksum, and size, and the notes
 of every release. The server reads it once a day; nothing but the request itself
-is sent. CRYOPILOT_NO_UPDATE_CHECK=1 turns the daily check off.
+is sent. The server also reads it when it starts, and Settings > About has a
+button that reads it at once. CRYOPILOT_NO_UPDATE_CHECK=1 turns all of this off.
 
 An update changes nothing until the new program has passed its checks. It is
 downloaded next to the current program, so that the last step is one rename on
@@ -128,17 +129,35 @@ def fetch_manifest() -> dict[str, Any]:
     return manifest
 
 
-def check_daily() -> None:
-    """The background check. Computers without internet access just never see a notice."""
+def checks_off() -> bool:
+    return os.environ.get("CRYOPILOT_NO_UPDATE_CHECK") == "1"
 
-    if os.environ.get("CRYOPILOT_NO_UPDATE_CHECK") == "1":
+
+def checked_at() -> float | None:
+    value = _read_cache().get("checked_at")
+    return float(value) if isinstance(value, (int, float)) else None
+
+
+def check_daily(*, force: bool = False) -> None:
+    """The background check: at start (force) and then once a day. Computers without
+    internet access just never see a notice."""
+
+    if checks_off():
         return
-    if time.time() - float(_read_cache().get("checked_at") or 0) < CHECK_EVERY:
+    if not force and time.time() - (checked_at() or 0) < CHECK_EVERY:
         return
     try:
         fetch_manifest()
     except UpdateError:
         pass
+
+
+def check_now() -> dict[str, Any]:
+    """The Check for updates button. Raises UpdateError with a message for the person."""
+
+    if checks_off():
+        raise UpdateError("Update checks are turned off on this server (CRYOPILOT_NO_UPDATE_CHECK=1).")
+    return fetch_manifest()
 
 
 def newer_release(manifest: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -379,15 +398,20 @@ def mark_in_use() -> None:
 
 def _background() -> None:
     next_sweep = 0.0
+    first = True
     while True:
         mark_in_use()
         if time.monotonic() >= next_sweep:
             next_sweep = time.monotonic() + SWEEP_EVERY
             try:
+                # A restart is the usual way to look for a new version, so it always asks.
+                check_daily(force=first)
+                if first and (update_notice := notice()):
+                    print(f"{update_notice}\n", flush=True)
                 remove_old_versions()
-                check_daily()
             except Exception as exc:
                 print(f"The update check failed: {exc}", file=sys.stderr, flush=True)
+            first = False
         time.sleep(MARK_EVERY)
 
 
@@ -417,6 +441,8 @@ def status() -> dict[str, Any]:
         "new_releases": notes_since_current(manifest) if manifest else [],
         "blocker": install_blocker(),
         "install": job,
+        "checks_off": checks_off(),
+        "checked_at": None if checks_off() else checked_at(),
     }
 
 

@@ -239,8 +239,7 @@ def main(argv: list[str] | None = None) -> int:
             f"    ssh -L {args.port}:localhost:{args.port} <user>@<this-computer>\n",
             flush=True,
         )
-    if update_notice := updates.notice():
-        print(f"{update_notice}\n", flush=True)
+    # The update check prints its notice once it has asked the website (updates._background).
     if not args.no_open:
         launch = url if args.no_auth else f"{url}/?launch={os.environ['CRYOPILOT_LAUNCH_CODE']}"
         threading.Thread(target=open_browser_when_listening, args=(args.host, args.port, launch), daemon=True).start()

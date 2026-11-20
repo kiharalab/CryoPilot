@@ -369,19 +369,34 @@ function LayerRow({ layer, controller, onError }) {
         />
       </div>
       {layer.kind === 'volume' && ready ? <VolumeControls layer={layer} controller={controller} /> : null}
-      {layer.kind === 'structure' && layer.daq && ready ? (
-        <div className="flex items-center gap-2 pb-1 pl-8 pr-1 pt-0.5">
-          <Segmented
-            size="sm"
-            ariaLabel="Colour"
-            value={layer.colorMode}
-            onChange={(mode) => safely(controller.setStructureColor(layer.key, mode))}
-            options={[
-              { value: 'daq', label: 'DAQ' },
-              { value: 'chain', label: 'Chain' },
-            ]}
-          />
-          {layer.colorMode === 'daq' ? <DaqLegend domain={layer.daqDomain} /> : null}
+      {layer.kind === 'structure' && ready ? (
+        <div className="space-y-1.5 pb-1 pl-8 pr-1 pt-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented
+              size="sm"
+              ariaLabel="Style"
+              value={layer.style}
+              onChange={(style) => safely(controller.setStructureStyle(layer.key, style))}
+              options={[
+                { value: 'cartoon', label: 'Cartoon' },
+                { value: 'sticks', label: 'Sticks' },
+                { value: 'both', label: 'Both' },
+              ]}
+            />
+            {layer.daq ? (
+              <Segmented
+                size="sm"
+                ariaLabel="Colour"
+                value={layer.colorMode}
+                onChange={(mode) => safely(controller.setStructureColor(layer.key, mode))}
+                options={[
+                  { value: 'daq', label: 'DAQ' },
+                  { value: 'chain', label: 'Chain' },
+                ]}
+              />
+            ) : null}
+          </div>
+          {layer.daq && layer.colorMode === 'daq' ? <DaqLegend domain={layer.daqDomain} /> : null}
         </div>
       ) : null}
     </li>

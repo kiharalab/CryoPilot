@@ -151,6 +151,39 @@ def test_the_check_runs_once_a_day(site, installed, monkeypatch):
     assert updates.newer_release(updates.cached_manifest())["version"] == "9.9.9"
 
 
+def test_a_server_start_asks_again_within_the_day(site, installed, monkeypatch):
+    publish(site, version="9.9.8")
+    monkeypatch.setattr(updates, "RELEASES_URL", f"{site[1]}/releases.json")
+    monkeypatch.setenv("CRYOPILOT_NO_UPDATE_CHECK", "0")
+    updates.check_daily()
+    publish(site, version="9.9.9")
+    updates.check_daily()
+    assert updates.newer_release(updates.cached_manifest())["version"] == "9.9.8"
+    updates.check_daily(force=True)
+    assert updates.newer_release(updates.cached_manifest())["version"] == "9.9.9"
+
+
+def test_the_background_check_asks_at_start_and_prints_the_notice(site, installed, monkeypatch, capsys):
+    publish(site, version="9.9.8")
+    monkeypatch.setattr(updates, "RELEASES_URL", f"{site[1]}/releases.json")
+    monkeypatch.setenv("CRYOPILOT_NO_UPDATE_CHECK", "0")
+    updates.check_daily()
+    publish(site, version="9.9.9")
+    monkeypatch.setattr(updates, "remove_old_versions", lambda: None)
+    monkeypatch.setattr(updates, "mark_in_use", lambda: None)
+
+    class Stop(Exception):
+        pass
+
+    def stop(_seconds):
+        raise Stop
+
+    monkeypatch.setattr(updates.time, "sleep", stop)
+    with pytest.raises(Stop):
+        updates._background()
+    assert "CryoPilot 9.9.9 is available" in capsys.readouterr().out
+
+
 def test_turning_the_check_off_sends_nothing_and_shows_nothing(site, installed, monkeypatch):
     publish(site)
     monkeypatch.setattr(updates, "RELEASES_URL", f"{site[1]}/releases.json")
@@ -420,6 +453,38 @@ def client(monkeypatch):
     monkeypatch.setattr(updates, "restart_requested", False)
     monkeypatch.setattr(updates, "stop_server", None)
     return TestClient(app)
+
+
+def test_the_check_button_reads_the_site_at_once(site, installed, monkeypatch, client):
+    publish(site, version="9.9.8")
+    monkeypatch.setattr(updates, "RELEASES_URL", f"{site[1]}/releases.json")
+    monkeypatch.setenv("CRYOPILOT_NO_UPDATE_CHECK", "0")
+    updates.check_daily()
+    first = client.get("/api/update").json()
+    assert first["latest"] == "9.9.8" and first["checks_off"] is False
+    assert first["checked_at"] == pytest.approx(time.time(), abs=60)
+
+    publish(site, version="9.9.9")
+    view = client.post("/api/update/check")
+    assert view.status_code == 200
+    assert view.json()["latest"] == "9.9.9"
+
+    monkeypatch.setattr(updates, "RELEASES_URL", "http://127.0.0.1:9/releases.json")
+    failed = client.post("/api/update/check")
+    assert failed.status_code == 502
+    assert "Could not read" in failed.json()["message"]
+    assert client.get("/api/update").json()["latest"] == "9.9.9"
+
+
+def test_the_check_button_sends_nothing_when_checks_are_off(site, installed, monkeypatch, client):
+    publish(site)
+    monkeypatch.setattr(updates, "RELEASES_URL", f"{site[1]}/releases.json")
+    monkeypatch.setenv("CRYOPILOT_NO_UPDATE_CHECK", "1")
+    answer = client.post("/api/update/check")
+    assert answer.status_code == 409
+    assert not updates.CACHE_PATH.exists()
+    view = client.get("/api/update").json()
+    assert view["checks_off"] is True and view["checked_at"] is None
 
 
 def wait_for_install(client):

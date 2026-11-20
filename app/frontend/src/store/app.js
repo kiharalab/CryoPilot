@@ -41,6 +41,7 @@ export const useApp = create((set, get) => ({
   setup: null,
   /** /api/update payload; null until loaded. */
   update: null,
+  updateChecking: false,
   updateRestarting: false,
   projects: [],
   projectId: readStorage(PROJECT_KEY, null),
@@ -109,6 +110,17 @@ export const useApp = create((set, get) => ({
 
   async refreshUpdate() {
     set({ update: await api.update() })
+  },
+  /** Settings > About: asks the website now instead of waiting for the daily check. */
+  async checkUpdate() {
+    set({ updateChecking: true })
+    try {
+      set({ update: await api.checkUpdate() })
+    } catch (err) {
+      get().toast({ tone: 'error', title: 'Could not check for updates.', description: err.message })
+    } finally {
+      set({ updateChecking: false })
+    }
   },
   async installUpdate() {
     try {

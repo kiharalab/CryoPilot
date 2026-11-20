@@ -463,7 +463,8 @@ def flip_map(map_path: str, output_path: str = "outputs/map_flipped.mrc", axis: 
     """Save a mirrored map copy for handedness comparison; never change the model.
 
     Independently realign the immutable-chirality model to both hands, visually
-    inspect density overlays, and compare DAQ with equivalent settings/coverage.
+    inspect density overlays, and compare the VESPER DOT score of a reference fit
+    and DAQ, each with equivalent settings.
     A score increase supports but does not prove a handedness correction.
 
     Args:
@@ -723,8 +724,9 @@ def align_model_to_map(model_path: str, map_path: str, resolution: float, contou
     """Rigidly fit one candidate using VESPER and a simulated density map.
 
     Returns fitted mmCIF coordinates in map space, a proper rotation/translation,
-    DOT scores and alternative placements. DOT is not a Q-score. When comparing the two
-    map hands, fit with the same settings to both so the comparison is fair. ChimeraX
+    DOT scores and alternative placements. When comparing the two map hands, fit with
+    the same settings to both; the best placement's DOT score and Z-score in each hand
+    are the main handedness evidence from a reference structure. ChimeraX
     generates the simulated map; VESPER performs the alignment. ChimeraX fitmap (from
     bash, `chimerax --nogui --offscreen --exit script.cxc`) is an alternative for local
     rigid-body fitting of a model that is already roughly placed.
@@ -780,16 +782,15 @@ def download_pdb_homolog(entity_id: str, output_dir: str = "outputs/pdb_referenc
 
 @function_tool
 def run_qscore(model_path: str, map_path: str, output_dir: str = "outputs/qscore") -> str:
-    """Calculate ChimeraX Q-scores for one already VESPER-aligned PDB reference.
+    """Calculate ChimeraX Q-scores for one model fitted to a map.
 
     Saves per-atom raw scores with missing coverage and reproducible settings.
-    Use compare_map_hands with metric='qscore' to compare matched atoms. Q-score
-    measures atom resolvability, not a calibrated handedness probability.
+    Q-score measures atom resolvability; use it to judge local fit.
 
     Args:
         model_path: One fitted candidate or homolog, in map coordinates.
         map_path: Corresponding experimental map.
-        output_dir: Separate output directory for each reference and map hand.
+        output_dir: Separate output directory for each model and map.
     """
     import gemmi
     model, density = _workspace_path(model_path, must_exist=True), _workspace_path(map_path, must_exist=True)
@@ -814,23 +815,21 @@ def run_qscore(model_path: str, map_path: str, output_dir: str = "outputs/qscore
 
 @function_tool
 def compare_map_hands(original_scores_path: str, flipped_scores_path: str,
-                      output_path: str = "outputs/handedness.json", metric: str = "aa", window: int = 19) -> str:
-    """Compare the same model's scores in two map hands on exactly matched residues or atoms.
+                      output_path: str = "outputs/handedness.json", window: int = 19) -> str:
+    """Compare the same model's DAQ in two map hands on exactly matched residues.
 
-    For DAQ ('aa') it reports the mean of the centred `window`-residue AA DAQ over residues
-    scored in both hands, plus coverage; for 'qscore' it compares atoms of a fitted reference.
-    The tool reports the evidence; deciding the hand is up to you.
+    Reports the mean of the centred `window`-residue AA DAQ over residues scored in both
+    hands, plus coverage. The tool reports the evidence; deciding the hand is up to you.
 
     Args:
-        original_scores_path: Score CSV for the model fitted to one map hand.
-        flipped_scores_path: Score CSV for the same model fitted to the other hand.
+        original_scores_path: daq_scores.csv for the model fitted to one map hand.
+        flipped_scores_path: daq_scores.csv for the same model fitted to the other hand.
         output_path: JSON evidence report; a paired CSV is also saved.
-        metric: 'aa' (DAQ) or 'qscore'.
         window: Residue window for the DAQ running mean (1 gives single-residue scores).
     """
     return json.dumps(compare_scores(_workspace_path(original_scores_path, must_exist=True),
                                      _workspace_path(flipped_scores_path, must_exist=True),
-                                     _workspace_path(output_path), metric, window), indent=2)
+                                     _workspace_path(output_path), window), indent=2)
 
 
 @function_tool

@@ -1,8 +1,8 @@
-"""Compare scores on explicitly matched residues or atoms, never pooled candidates.
+"""Compare DAQ on explicitly matched residues, never pooled candidates.
 
-DAQ comparisons use the centered 19-residue mean of AA DAQ, computed along each chain
+Comparisons use the centered 19-residue mean of AA DAQ, computed along each chain
 over the residues scored in both tables, so both sides are smoothed over the same
-neighbours. Q-scores are compared per atom."""
+neighbours."""
 from __future__ import annotations
 
 import csv
@@ -23,23 +23,21 @@ def model_provenance(path: Path, candidate_index: int = 1) -> dict:
     return {"source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "candidate_index": candidate_index}
 
 
-def _read_scores(path: Path, metric: str):
+def _read_scores(path: Path):
     scores = {}
     candidates = set()
     with path.open(newline="") as handle:
         reader = csv.DictReader(handle)
         fields = ["chain", "residue_number", "insertion_code", "residue_name"]
-        if metric == "qscore":
-            fields.append("atom")
-        if not set(fields + [metric]) <= set(reader.fieldnames or []):
-            raise ValueError(f"Missing identity columns or raw {metric} scores in {path}.")
+        if not set(fields + ["aa"]) <= set(reader.fieldnames or []):
+            raise ValueError(f"Missing identity columns or raw AA DAQ scores in {path}.")
         for row in reader:
             key = tuple(row[field].strip() for field in fields)
             if key in scores:
-                raise ValueError("Duplicate residue/atom identity; compare one candidate at a time.")
+                raise ValueError("Duplicate residue identity; compare one candidate at a time.")
             if row.get("candidate_index"):
                 candidates.add(row["candidate_index"])
-            value = float(row[metric]) if row[metric] else None
+            value = float(row["aa"]) if row["aa"] else None
             scores[key] = value if value is not None and math.isfinite(value) else None
     if len(candidates) > 1 or not scores:
         raise ValueError("Expected one nonempty candidate score table.")
@@ -65,15 +63,13 @@ def matched_window_means(left: dict, right: dict, window: int = DAQ_WINDOW):
     return shared, smooth_left, smooth_right
 
 
-def compare_scores(original: Path, flipped: Path, output: Path, metric: str = "aa", window: int = DAQ_WINDOW) -> dict:
+def compare_scores(original: Path, flipped: Path, output: Path, window: int = DAQ_WINDOW) -> dict:
     if output.suffix.lower() != ".json":
         raise ValueError("Comparison report path must end in .json.")
-    if metric not in ("aa", "qscore"):
-        raise ValueError("Handedness comparisons use 19-residue mean AA DAQ or Q-score.")
     if original.resolve() == flipped.resolve():
         raise ValueError("Provide distinct score tables for the two map hands.")
     metadata = [json.loads(path.with_suffix(".metadata.json").read_text()) for path in (original, flipped)]
-    if any(m.get("metric_type") != ("daq" if metric == "aa" else "qscore") for m in metadata):
+    if any(m.get("metric_type") != "daq" for m in metadata):
         raise ValueError("Missing or incompatible score provenance; recompute using the agent tools.")
     if metadata[0]["settings"] != metadata[1]["settings"]:
         raise ValueError("Scoring settings differ between map hands; recompute with equivalent settings.")
@@ -81,20 +77,16 @@ def compare_scores(original: Path, flipped: Path, output: Path, metric: str = "a
         raise ValueError("Scores come from different source candidates; independently fit the SAME model to both hands.")
     if metadata[0]["map_path"] == metadata[1]["map_path"]:
         raise ValueError("Both score tables refer to the same map.")
-    left, right = _read_scores(original, metric), _read_scores(flipped, metric)
+    left, right = _read_scores(original), _read_scores(flipped)
     if left.keys() != right.keys():
-        raise ValueError("Residue/atom identities differ; use the same candidate or homolog in both hands.")
-    if metric == "aa":
-        shared, left_used, right_used = matched_window_means(left, right, window)
-    else:
-        shared = [key for key in left if left[key] is not None and right[key] is not None]
-        left_used, right_used = left, right
+        raise ValueError("Residue identities differ; use the same candidate in both hands.")
+    shared, left_used, right_used = matched_window_means(left, right, window)
     if not shared:
-        raise ValueError("No jointly scored residues/atoms; handedness is unresolved.")
+        raise ValueError("No jointly scored residues; handedness is unresolved.")
     original_mean = sum(left_used[key] for key in shared) / len(shared)
     flipped_mean = sum(right_used[key] for key in shared) / len(shared)
     delta = flipped_mean - original_mean
-    result = {"ok": True, "metric": f"aa_{window}_residue_mean" if metric == "aa" else metric, "original_map": metadata[0]["map_path"],
+    result = {"ok": True, "metric": f"aa_{window}_residue_mean", "original_map": metadata[0]["map_path"],
               "flipped_map": metadata[1]["map_path"], "original_scores": str(original), "flipped_scores": str(flipped),
               "original_mean": original_mean, "flipped_mean": flipped_mean, "delta_flipped_minus_original": delta,
               "flipped_higher": delta > 0,
@@ -102,7 +94,7 @@ def compare_scores(original: Path, flipped: Path, output: Path, metric: str = "a
                            "flipped_scored": sum(v is not None for v in right.values()), "matched": len(shared),
                            "excluded_from_both_means": len(left) - len(shared)},
               "settings": metadata[0]["settings"], "reference": metadata[0]["reference"],
-              "note": (f"DAQ means average the {window}-residue mean over residues scored in both hands. " if metric == "aa" else "") + "Means use only the explicit matched coverage. This is one line of evidence about the hand; weigh it with coverage, the size of the difference and the overlays."}
+              "note": f"DAQ means average the {window}-residue mean over residues scored in both hands. Means use only the explicit matched coverage. This is one line of evidence about the hand; weigh it with coverage, the size of the difference and the overlays."}
     if output.resolve() in (original.resolve(), flipped.resolve()):
         raise ValueError("Comparison output must not overwrite scores.")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -111,7 +103,7 @@ def compare_scores(original: Path, flipped: Path, output: Path, metric: str = "a
         raise ValueError("Comparison output must not overwrite scores.")
     with paired.open("w", newline="") as handle:
         writer = csv.writer(handle)
-        mean_label = f"{window}_residue_mean" if metric == "aa" else metric
+        mean_label = f"{window}_residue_mean"
         writer.writerow(["identity", "original_single_residue", "flipped_single_residue",
                          f"original_{mean_label}", f"flipped_{mean_label}", "used_in_both_means"])
         for key in left:
@@ -140,7 +132,7 @@ def compare_stage_scores(before: Path, after: Path, output: Path, window: int = 
         raise ValueError("DAQ settings differ between stages; recompute with equivalent settings.")
     if metadata[0]["map_path"] != metadata[1]["map_path"]:
         raise ValueError("The two versions were scored against different maps; score both against the same map.")
-    left, right = _read_scores(before, "aa"), _read_scores(after, "aa")
+    left, right = _read_scores(before), _read_scores(after)
     shared, left_used, right_used = matched_window_means(left, right, window)
     if not shared:
         raise ValueError("No residues scored in both stages.")
